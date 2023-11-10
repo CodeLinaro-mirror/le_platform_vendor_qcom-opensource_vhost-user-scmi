@@ -6,7 +6,7 @@ License: BSD-3-Clause-Clear
 Group: vhost-user-scmi
 Source0: %{name}-%{version}.tar.gz
 
-BuildRequires: cmake libstd vhost-user-lib
+BuildRequires: cmake libstd vhost-user-lib safelinux-modules-uapi-headers
 Requires: libstd vhost-user-lib
 
 %description

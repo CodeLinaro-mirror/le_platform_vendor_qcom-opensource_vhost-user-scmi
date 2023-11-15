@@ -3,7 +3,7 @@
  */
 
 #include <stdio.h>
-#include <qcom_uscmi.h>
+#include <uapi/misc/qcom_uscmi.h>
 #include <sys/ioctl.h>
 
 #include "scmi_protocol.h"

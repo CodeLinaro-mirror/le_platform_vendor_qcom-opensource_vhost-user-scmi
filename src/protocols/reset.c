@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <sys/ioctl.h>
-#include <qcom_uscmi.h>
+#include <uapi/misc/qcom_uscmi.h>
 #include "scmi_protocol.h"
 #include "access_control.h"
 #include "iface_scmi_dev.h"

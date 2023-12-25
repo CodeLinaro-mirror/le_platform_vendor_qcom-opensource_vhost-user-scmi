@@ -17,6 +17,7 @@ set(VHOST_USER_SCMI_SOURCE_FILES
   src/protocols/base.c
   src/protocols/perf.c
   src/protocols/reset.c
+  src/protocols/power.c
 )
 
 SET(CMAKE_INSTALL_PREFIX "/usr/")

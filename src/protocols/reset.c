@@ -38,7 +38,7 @@ int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *id, scmi
 	req->proto = SCMI_PROTO_RESET;
 	req->oper = op;
 	if (id)
-		strlcpy(req->reset_id, id, RESET_ID_LEN - 1);
+		strlcpy(req->name, id, NAME_LEN - 1);
 
 	return ioctl(fd, SCMI_IOCTL_RST, req);
 }

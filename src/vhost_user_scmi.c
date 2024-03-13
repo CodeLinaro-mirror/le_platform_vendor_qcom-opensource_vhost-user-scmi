@@ -165,6 +165,7 @@ usage(void)
             "-h/--help\n"
             "-s/--sock   <socket_path>\n"
             "-f/--perf   <domainid/level0:level1:..leveln,domainid1/level0:..leveln>\n"
+            "-p/--power  <power domian nums>\n"
             "-r/--reset  <reset domian nums>\n"
             "-l/--log    log=<file/stdio>,[path=<path/to/logfile>],level=<info/debug>\n"
             "-d/--device  <devicenmae,protocol/domainid,protocol/domainid,...>\n");
@@ -176,6 +177,7 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
     int opt;
     static struct option long_options[] = {
         {"sock",    required_argument, 0,  's' },
+        {"power",   required_argument, 0,  'p' },
         {"perf",    required_argument, 0,  'f' },
         {"reset",   required_argument, 0,  'r' },
         {"device",  required_argument, 0,  'd' },
@@ -192,6 +194,9 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
                     printf("socket path is too long, please limit it to < 256 bytes!\n");
                     return -1;
                 }
+                break;
+            case 'p':
+                parse_power_node(vscmi, optarg);
                 break;
             case 'f':
                 parse_perf_node(vscmi, optarg);

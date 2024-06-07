@@ -43,7 +43,7 @@ struct perf_domain {
     uint16_t domain_id;
     uint16_t level_nums;
 #define MAX_PERF_LEVEL  16
-    uint16_t level[MAX_PERF_LEVEL];
+    uint32_t level[MAX_PERF_LEVEL];
 };
 
 struct perf_attributes {

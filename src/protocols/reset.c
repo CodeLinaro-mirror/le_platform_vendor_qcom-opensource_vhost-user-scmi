@@ -34,13 +34,14 @@ size_t strlcpy(char *dst, const char *src, size_t size)
 
 int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *id, scmi_rst_oper_t op)
 {
-	memset(req, 0, sizeof(*req));
-	req->proto = SCMI_PROTO_RESET;
-	req->oper = op;
-	if (id)
-		strlcpy(req->name, id, NAME_LEN - 1);
+    memset(req, 0, sizeof(*req));
+    req->proto = SCMI_PROTO_RESET;
+    req->oper = op;
+    if (id)
+        strlcpy(req->name, id, NAME_LEN - 1);
 
-	return ioctl(fd, SCMI_IOCTL_RST, req);
+    pr_debug("set reset: op=[%d]\n", op);
+    return ioctl(fd, SCMI_IOCTL_RST, req);
 }
 
 static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,

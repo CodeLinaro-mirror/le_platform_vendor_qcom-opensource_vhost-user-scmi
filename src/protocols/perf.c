@@ -16,12 +16,13 @@
 
 int perf_operation_request(int fd, scmi_oper_ioctl_t *req, int level, scmi_prf_oper_t op)
 {
-   	memset(req, 0, sizeof(*req));
-	req->proto = SCMI_PROTO_PERFORMANCE;
-	req->oper = op;
-	req->level = level;
+    memset(req, 0, sizeof(*req));
+    req->proto = SCMI_PROTO_PERFORMANCE;
+    req->oper = op;
+    req->level = level;
 
-	return ioctl(fd, SCMI_IOCTL_PRF, req);
+    pr_debug("set perf level: op=[%d] level=[%d] \n", op, level);
+    return ioctl(fd, SCMI_IOCTL_PRF, req);
 }
 
 static int get_sustained_perf_level(struct vhost_user_scmi *vscmi, uint32_t domain_id)
@@ -161,6 +162,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 // Worst-case transition latency in microseconds to move from any supported performance to
                 // the level indicated by this entry in the array.
                 rsp->ret_values[ret_len++] = 1; // hardcode here, may get from platform.
+                pr_debug("domain_id=%d, level=%d \n", domainid, pd->level[i]);
             }
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;

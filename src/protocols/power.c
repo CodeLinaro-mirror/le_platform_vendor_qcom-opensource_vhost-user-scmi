@@ -14,11 +14,12 @@
 #define POWER_STATETYPE_SHFIT 30
 int power_operation_request(int fd, scmi_oper_ioctl_t *req, scmi_pwr_oper_t op)
 {
-	memset(req, 0, sizeof(*req));
-	req->proto = SCMI_PROTO_POWER;
-	req->oper = op;
+    memset(req, 0, sizeof(*req));
+    req->proto = SCMI_PROTO_POWER;
+    req->oper = op;
 
-	return ioctl(fd, SCMI_IOCTL_PWR, req);
+    pr_debug("set power: op=[%d] \n", op);
+    return ioctl(fd, SCMI_IOCTL_PWR, req);
 }
 
 static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
@@ -93,7 +94,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             }
             power_stat = req->params[1];
             if ((power_stat & POWER_TYPEID_MASK) == 0) {
-                if (power_stat & (1UL << POWER_STATETYPE_SHFIT) == 0) {
+                if ((power_stat & (1UL << POWER_STATETYPE_SHFIT)) == 0) {
                     pwr_oper = SCMI_PWR_ON;
                 } else {
                     pwr_oper = SCMI_PWR_OFF;

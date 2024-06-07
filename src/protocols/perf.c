@@ -79,7 +79,6 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 case 0x4:
                 case 0x7:
                 case 0x8:
-                case 0xC:
                      rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
                      break;
                 case 0x5:
@@ -87,6 +86,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 case 0x9:
                 case 0xA:
                 case 0xB:
+                case 0xC:
                      rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
                      break;
                 default:
@@ -106,7 +106,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
              *[27]: fastchannel support - 0
              *[26]: extended performence domain name - 0
              *[25-0]*/
-            rsp->ret_values[1] = 0x4000;
+            rsp->ret_values[1] = 0x40000000;
             //rate_limit, the minimum time required between successive
             //requests. A value of 0 indicates that this field is not
             //supported by the platform.
@@ -122,6 +122,9 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                  break;
             }
             rsp->ret_values[4] = sus_level;
+            rsp->ret_values[5] = ('p' << 0) | ('e' << 8) | ('r' << 16) | ('f' << 24);
+            rsp->ret_values[6] = ((domainid + '0') << 0) | ('\0' << 8);
+
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
@@ -184,14 +187,6 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             rsp->ret_values[1] = 0 /*TODO  get level with ioctl*/;
             // return the reocrd level
-            break;
-        case 0xC:
-            pr_debug("msg type is get name\n");
-            domainid = req->params[0];
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0;
-            rsp->ret_values[2] = 'D' << 0 | 'o' << 8 | 'm' << 16 | '0' << 24;
-            rsp->ret_values[2] = '\0';
             break;
         default:
             rsp->ret_values[0] = SCMI_RESP_STATUS_INV;

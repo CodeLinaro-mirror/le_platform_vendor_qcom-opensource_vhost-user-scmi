@@ -97,6 +97,9 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             // currenlty, each domain_id has the same attribute.
             rsp->ret_values[1] = 0x0;
             rsp->ret_values[2] = 0xFFFFFFFF; //indicates this field is not supported by the platform
+            rsp->ret_values[3] = ('r' << 0) | ('e' << 8) | ('s' << 16) | ('e' << 24);
+            rsp->ret_values[4] = ('t' << 0) | (domain_id + '8') << 0 | ('\0' << 16);
+
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:

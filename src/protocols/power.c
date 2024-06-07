@@ -75,13 +75,12 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             domain_id = req->params[0];
             if (domain_id >= vscmi->pw_attr.domain_nums)
                 return -1;
-
             // currently, each domain has same attribute.
             rsp->ret_values[1] = 0x1 << 29; //Power state synchronous support.
-            if (ret < 0)
-                rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
-            else
-                rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            rsp->ret_values[2] = ('p' << 0) | ('o' << 8) | ('w' << 16) | ('e' << 24);
+            rsp->ret_values[3] = ('r' << 0) | ((domain_id + '0') << 8) | ('\0' << 16);
+
+            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
             pr_debug("msg type is power set for domain %d \n", domain_id);

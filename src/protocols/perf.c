@@ -37,20 +37,21 @@ static int get_sustained_perf_level(struct vhost_user_scmi *vscmi, uint32_t doma
 
 static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
                         struct virtio_scmi_request *req, uint32_t req_len,
-                        struct virtio_scmi_response *rsp, uint32_t rsp_len)
+                        struct virtio_scmi_response *rsp, uint32_t *rsp_len)
 {
-    int domainid, level_start, level, offset;
+    int domainid, level_start, level;
     struct perf_domain *pd;
     scmi_oper_ioctl_t request;
     uint32_t sus_level;
     int i, fd;
+    uint32_t ret_len = 1;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0x30000;
+            rsp->ret_values[ret_len++] = 0x30000;
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
@@ -61,13 +62,13 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
              * 0 - abstract linear scale
              * [15:0] number of performance domain
              */
-            rsp->ret_values[1] = vscmi->pf_attr.domain_nums << 0;
+            rsp->ret_values[ret_len++] = vscmi->pf_attr.domain_nums << 0;
             // low address for statistics shared memory region
-            rsp->ret_values[2] = 0;
+            rsp->ret_values[ret_len++] = 0;
             // high address for statistics shared memory region
-            rsp->ret_values[3] = 0;
+            rsp->ret_values[ret_len++] = 0;
             // static lens
-            rsp->ret_values[4] = 0;
+            rsp->ret_values[ret_len++] = 0;
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
@@ -93,11 +94,12 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                      rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
             }
 
-            rsp->ret_values[1] = 0;
+            rsp->ret_values[ret_len++] = 0;
             break;
         case 0x3:
             domainid = req->params[0];
             pr_debug("msg type is domain attribute, domainid = %d \n", domainid);
+
             /*
              *[31]: can set limit - 0
              *[30]: can set performance level - 1
@@ -106,24 +108,25 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
              *[27]: fastchannel support - 0
              *[26]: extended performence domain name - 0
              *[25-0]*/
-            rsp->ret_values[1] = 0x40000000;
+            rsp->ret_values[ret_len++] = 0x40000000;
             //rate_limit, the minimum time required between successive
             //requests. A value of 0 indicates that this field is not
             //supported by the platform.
-            rsp->ret_values[2] = 0;
+            rsp->ret_values[ret_len++] = 0;
             // sustained_freq - Base frequency corresponding to the
             // sustained performance level. Expressed in units of kHz.
-            rsp->ret_values[3] = 1000; // Currently hardcode here, may get from platform automatically.
+            rsp->ret_values[ret_len++] = 1000; // Currently hardcode here, may get from platform automatically.
             // sustained_perf_level - The performance level value that corresponds to the sustained
             // performance delivered by the platform.
             sus_level = get_sustained_perf_level(vscmi, domainid);
             if (sus_level < 0) {
-                 rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
-                 break;
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                ret_len = 1;
+                break;
             }
-            rsp->ret_values[4] = sus_level;
-            rsp->ret_values[5] = ('p' << 0) | ('e' << 8) | ('r' << 16) | ('f' << 24);
-            rsp->ret_values[6] = ((domainid + '0') << 0) | ('\0' << 8);
+            rsp->ret_values[ret_len++] = sus_level;
+            rsp->ret_values[ret_len++] = ('p' << 0) | ('e' << 8) | ('r' << 16) | ('f' << 24);
+            rsp->ret_values[ret_len++] = ((domainid + '0') << 0) | ('\0' << 8);
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
@@ -148,17 +151,16 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
              * Bits[15:12] Reserved, must be zero.
              * Bits[11:0] Number of performance levels that are returned by this call.
             */
-            rsp->ret_values[1] = (0 /*no remaining levles*/ << 16) |
+            rsp->ret_values[ret_len++] = (0 /*no remaining levles*/ << 16) |
                     (pd->level_nums - level_start /*number of level*/) << 0;
-            offset = 2;
             for (i = level_start; i < pd->level_nums; i++) {
-                rsp->ret_values[offset++] = pd->level[i];
+                rsp->ret_values[ret_len++] = pd->level[i];
                 // Power cost. A value of zero indicates that the power cost is not reported by the platform.
-                rsp->ret_values[offset++] = 0;
+                rsp->ret_values[ret_len++] = 0;
                 // Bits[31:16] Reserved, must be zero.
                 // Worst-case transition latency in microseconds to move from any supported performance to
                 // the level indicated by this entry in the array.
-                rsp->ret_values[offset++] = 1; // hardcode here, may get from platform.
+                rsp->ret_values[ret_len++] = 1; // hardcode here, may get from platform.
             }
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
@@ -185,7 +187,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             pr_debug("msg type is get leve, get domain %d level %d \n", domainid, 0);
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0 /*TODO  get level with ioctl*/;
+            rsp->ret_values[ret_len++] = 0 /*TODO  get level with ioctl*/;
             // return the reocrd level
             break;
         default:
@@ -194,6 +196,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
     }
 
     rsp->hdr = req->hdr;
+    *rsp_len = ret_len * 4;
     return 0;
 }
 

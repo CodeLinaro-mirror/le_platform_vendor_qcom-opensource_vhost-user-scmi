@@ -113,7 +113,7 @@ struct scmi_protocol_ops {
     char name[16];
     int id;
     int (*req_process)(struct vhost_user_scmi *, struct scmi_msg_info *, struct virtio_scmi_request *,
-        uint32_t, struct virtio_scmi_response *, uint32_t);
+        uint32_t, struct virtio_scmi_response *, uint32_t *);
 };
 
 

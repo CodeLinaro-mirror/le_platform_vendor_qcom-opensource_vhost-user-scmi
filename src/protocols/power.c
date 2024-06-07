@@ -23,7 +23,7 @@ int power_operation_request(int fd, scmi_oper_ioctl_t *req, scmi_pwr_oper_t op)
 
 static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
                         struct virtio_scmi_request *req, uint32_t req_len,
-                        struct virtio_scmi_response *rsp, uint32_t rsp_len)
+                        struct virtio_scmi_response *rsp, uint32_t *rsp_len)
 {
     uint32_t domain_id;
     uint32_t power_stat;
@@ -33,21 +33,22 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     scmi_pwr_oper_t pwr_oper;
     int fd;
     static uint32_t record_power_stat = 0;
+    uint32_t ret_len = 1;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0x20000;
+            rsp->ret_values[ret_len++] = 0x20000;
 
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = vscmi->pw_attr.domain_nums; //get_power_domain_number();
-            rsp->ret_values[2] = 0;
-            rsp->ret_values[3] = 0;
-            rsp->ret_values[4] = 0; // no shared memory region.
+            rsp->ret_values[ret_len++] = vscmi->pw_attr.domain_nums; //get_power_domain_number();
+            rsp->ret_values[ret_len++] = 0;
+            rsp->ret_values[ret_len++] = 0;
+            rsp->ret_values[ret_len++] = 0; // no shared memory region.
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
@@ -76,11 +77,11 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             if (domain_id >= vscmi->pw_attr.domain_nums)
                 return -1;
             // currently, each domain has same attribute.
-            rsp->ret_values[1] = 0x1 << 29; //Power state synchronous support.
-            rsp->ret_values[2] = ('p' << 0) | ('o' << 8) | ('w' << 16) | ('e' << 24);
-            rsp->ret_values[3] = ('r' << 0) | ((domain_id + '0') << 8) | ('\0' << 16);
+            rsp->ret_values[ret_len++] = 0x1 << 29; //Power state synchronous support.
+            rsp->ret_values[ret_len++] = ('p' << 0) | ('o' << 8) | ('w' << 16) | ('e' << 24);
+            rsp->ret_values[ret_len++] = ('r' << 0) | ((domain_id + '0') << 8) | ('\0' << 16);
 
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            rsp->ret_values[ret_len++] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
             pr_debug("msg type is power set for domain %d \n", domain_id);
@@ -119,7 +120,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             }
             // Currently no IOCTL for to get power state, so just return the record state.
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = record_power_stat;
+            rsp->ret_values[ret_len++] = record_power_stat;
             break;
         default:
             pr_err("msg id %d is not support\n", hdr->msg_id);
@@ -128,6 +129,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     }
 
     rsp->hdr = req->hdr;
+    *rsp_len = ret_len * 4;
     return 0;
 }
 

@@ -45,7 +45,7 @@ int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *id, scmi
 
 static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
                         struct virtio_scmi_request *req, uint32_t req_len,
-                        struct virtio_scmi_response *rsp, uint32_t rsp_len)
+                        struct virtio_scmi_response *rsp, uint32_t *rsp_len)
 {
     uint32_t domain_id;
     uint32_t reset_flag, reset_state;
@@ -53,20 +53,21 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     uint32_t channel_id;
     int fd;
     scmi_oper_ioctl_t request;
+    uint32_t ret_len = 1;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0x30000;
+            rsp->ret_values[ret_len++] = 0x30000;
 
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = vscmi->rs_attr.domain_nums;
+            rsp->ret_values[ret_len++] = vscmi->rs_attr.domain_nums;
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
@@ -86,7 +87,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
                 default:
                      rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
             }
-            rsp->ret_values[1] = 0;
+            rsp->ret_values[ret_len++] = 0;
             break;
         case 0x3:
             pr_debug("msg type is protocol domain attribute \n");
@@ -95,11 +96,12 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             if (domain_id >= vscmi->rs_attr.domain_nums)
                 return -1;
             // currenlty, each domain_id has the same attribute.
-            rsp->ret_values[1] = 0x0;
-            rsp->ret_values[2] = 0xFFFFFFFF; //indicates this field is not supported by the platform
-            rsp->ret_values[3] = ('r' << 0) | ('e' << 8) | ('s' << 16) | ('e' << 24);
-            rsp->ret_values[4] = ('t' << 0) | (domain_id + '8') << 0 | ('\0' << 16);
 
+            rsp->ret_values[ret_len++] = 0x0;
+            rsp->ret_values[ret_len++] = 0xFFFFFFFF; //indicates this field is not supported by the platform
+            rsp->ret_values[ret_len++] = ('r' << 0) | ('e' << 8) | ('s' << 16) | ('e' << 24);
+            rsp->ret_values[ret_len++] = ('t' << 0) | (domain_id + '0') << 8 | ('\0' << 16);
+ 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
@@ -127,6 +129,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     }
 
     rsp->hdr = req->hdr;
+    *rsp_len = ret_len * 4;
     return 0;
 }
 

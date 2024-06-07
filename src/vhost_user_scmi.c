@@ -49,7 +49,7 @@ struct scmi_protocol_ops *find_protocol(uint16_t protocol_id)
 }
 
 static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_scmi_request *req, int req_len,
-            struct virtio_scmi_response *rsp, int rsp_len)
+            struct virtio_scmi_response *rsp, uint32_t *rsp_len)
 {
     // parse the header
     struct scmi_msg_info hdr;
@@ -68,7 +68,7 @@ static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_sc
     if (ops && ops->req_process) {
         ret = ops->req_process(vscmi, &hdr, req, req_len, rsp, rsp_len);
         pr_debug("%s: rsp hdr = %x rsp_len =%d ret=%d \n",
-                    __func__, rsp->hdr, rsp_len, ret);
+                    __func__, rsp->hdr, *rsp_len, ret);
     } else {
         pr_err("The protocol %d is not supported \n", hdr.protocol_id);
         ret = -1;
@@ -81,7 +81,7 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
 
     struct virtio_scmi_request *req;
     struct virtio_scmi_response *rsp;
-    int req_len, rsp_len;
+    unsigned int req_len, rsp_len;
     int idx;
     int ret;
     struct iovec iov[2];
@@ -99,11 +99,14 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
         req = iov[0].iov_base;
         req_len = iov[0].iov_len - sizeof(req->hdr);
         rsp = iov[1].iov_base;
-        rsp_len = iov[1].iov_len - sizeof(rsp->hdr);
 
-        ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, rsp_len);
+        ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, &rsp_len);
         if (!ret) {
-            vq_relchain(vq, idx, iov[1].iov_len);
+            if (rsp_len > (iov[1].iov_len - sizeof(rsp->hdr))) {
+                pr_err("response size is too large! \n");
+            } else {
+                vq_relchain(vq, idx, rsp_len + sizeof(rsp->hdr));
+            }
         }
 
         smp_mb();

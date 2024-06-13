@@ -28,6 +28,7 @@
 #define DOMAIN2CHANNEL(domain_id)  (domain_id)
 
 #define SCMI_PROTOCOL_EMUL_SET(x)   DATA_SET(scmi_protolol_set, x)
+#define MAX_DOMAIN_LENGTH  16
 
 struct virtio_scmi_request {
         le32 hdr;
@@ -63,6 +64,7 @@ struct reset_attributes {
 struct protocol_domain {
     uint16_t protocol_id;
     uint16_t domain_id;
+    char domain_name[MAX_DOMAIN_LENGTH];
 };
 // domian id + protocol id -> dev_fd
 struct device_map {

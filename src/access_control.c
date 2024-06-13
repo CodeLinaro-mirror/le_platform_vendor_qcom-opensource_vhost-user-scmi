@@ -13,6 +13,48 @@
 #include "access_control.h"
 #include "log.h"
 
+void add_domainid_to_name(char *org, uint32_t domain_id, char *new)
+{
+    int i;
+    char *new_p = new;
+    if (domain_id > 999) {
+        pr_err("domain id is too large, domain name will be truncated !!\n");
+    }
+    // leave 3 bytes for domain_id
+    // leave 1 byte for \0
+    for (i = 0; i < MAX_DOMAIN_LENGTH - 4; i++) {
+        if (*org != '\0')
+            *new_p++ = *org++;
+        else
+            break;
+    }
+    snprintf(new_p, 4, "%d", domain_id);
+
+    pr_debug("domain_name return to agent is %s \n", new);
+}
+
+//define strlcpy to avoid the banned strncpy
+size_t strlcpy(char *dst, const char *src, size_t size)
+{
+    int copyed = 0;
+    int i;
+
+    if (!dst || !src || (size < 2))
+        return copyed;
+
+    for (i = 0; i < size - 1; i++) {
+        if (*src != '\0') {
+            *dst++ = *src++;
+            copyed++;
+        } else {
+            break;
+        }
+    }
+    *dst = '\0';
+
+    return copyed;
+}
+
 void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
 {
     struct device_resource *dr = &vscmi->dev_res;
@@ -44,8 +86,20 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
         if (!st | !stt) break;
         pd = &dm->prot_doms[dm->pd_nums++];
         pd->protocol_id = atoi(stt);
-        pd->domain_id = atoi(st);
-        pr_debug("%s : protocol_id = %d domian_id = %d \n", name, pd->protocol_id, pd->domain_id);
+
+        stt = strsep(&st, "/");
+        if (!st | !stt) break;
+
+        pd->domain_id = atoi(stt);
+
+        if (strlen(st) > MAX_DOMAIN_LENGTH) {
+            pr_err("%s: IOCTL will fail as the name of domain is truncated, max name length is %d !!\n",
+                __func__, MAX_DOMAIN_LENGTH);
+        }
+        snprintf(pd->domain_name, MAX_DOMAIN_LENGTH, "%s", st);
+
+        pr_debug("%s : protocol_id = %d domian_id = %d domain_name = %s \n", name,
+                        pd->protocol_id, pd->domain_id, pd->domain_name);
 
     }
     free(sr);
@@ -71,6 +125,27 @@ int get_dev_fd(struct device_resource *dev_res, int protocol, int domain_id)
     }
     return -1;
 
+}
+
+struct protocol_domain *get_dev_pd(struct device_resource *dev_res, int protocol, int domain_id)
+{
+    int i,j;
+    struct device_map *dm;
+    struct protocol_domain *pd;
+
+    if (!dev_res)
+        return NULL;
+
+    for (i = 0;i < dev_res->device_nums; i++) {
+        dm = &dev_res->dev_map[i];
+        for (j = 0; j < dm->pd_nums; j++) {
+            pd = &dm->prot_doms[j];
+            if ((protocol == pd->protocol_id) && (domain_id == pd->domain_id)) {
+                return pd;
+            }
+        }
+    }
+    return NULL;
 }
 
 bool access_is_ok_for_protocol(struct vhost_user_scmi *vscmi, int protocol)

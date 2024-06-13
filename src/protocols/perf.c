@@ -14,14 +14,15 @@
 #define SUPPORT_PROTOCOL_NUM    3
 #define SUPPORT_LEVEL 3
 
-int perf_operation_request(int fd, scmi_oper_ioctl_t *req, int level, scmi_prf_oper_t op)
+int perf_operation_request(int fd, scmi_oper_ioctl_t *req, char *name, int level, scmi_prf_oper_t op)
 {
     memset(req, 0, sizeof(*req));
     req->proto = SCMI_PROTO_PERFORMANCE;
     req->oper = op;
     req->level = level;
+    strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
 
-    pr_debug("set perf level: op=[%d] level=[%d] \n", op, level);
+    pr_debug("set perf level: name=%s op=[%d] level=[%d] \n", req->name, op, level);
     return ioctl(fd, SCMI_IOCTL_PRF, req);
 }
 
@@ -42,10 +43,13 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
 {
     int domainid, level_start, level;
     struct perf_domain *pd;
+    struct protocol_domain *proto_dm;
+    char name[MAX_DOMAIN_LENGTH];
     scmi_oper_ioctl_t request;
     uint32_t sus_level;
     int i, fd;
     uint32_t ret_len = 1;
+    int ret = 0;
 
     switch (hdr->msg_id) {
         case 0x0:
@@ -101,6 +105,12 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             domainid = req->params[0];
             pr_debug("msg type is domain attribute, domainid = %d \n", domainid);
 
+            proto_dm = get_dev_pd(&vscmi->dev_res, 0x13, domainid);
+            if (!proto_dm) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                break;
+            }
+
             /*
              *[31]: can set limit - 0
              *[30]: can set performance level - 1
@@ -126,8 +136,10 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 break;
             }
             rsp->ret_values[ret_len++] = sus_level;
-            rsp->ret_values[ret_len++] = ('p' << 0) | ('e' << 8) | ('r' << 16) | ('f' << 24);
-            rsp->ret_values[ret_len++] = ((domainid + '0') << 0) | ('\0' << 8);
+
+            add_domainid_to_name(proto_dm->domain_name, domainid, name);
+            int n = strlcpy(&rsp->ret_values[ret_len], name, MAX_DOMAIN_LENGTH);
+            ret_len += n / 4 + 1;
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
@@ -173,15 +185,25 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             level = req->params[1];
             pr_debug("msg type is set level, set domain %d to level %d \n", domainid, level);
 
+            proto_dm = get_dev_pd(&vscmi->dev_res, 0x13, domainid);
+            if (!proto_dm) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                break;
+            }
+
             fd = get_dev_fd(&vscmi->dev_res, 0x13, domainid);
             if (fd < 0) {
                 rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
                 break;
             }
 
-            perf_operation_request(fd, &request, level, SCMI_PRF_LVL_SET);
+            ret = perf_operation_request(fd, &request, (char *)proto_dm->domain_name, level, SCMI_PRF_LVL_SET);
             // ADD ioctl here to passdown the request.
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            if (ret < 0) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+            } else {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            }
             break;
         case 0x8:
             // get level
@@ -199,7 +221,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
 
     rsp->hdr = req->hdr;
     *rsp_len = ret_len * 4;
-    return 0;
+    return ret;
 }
 
 void parse_perf_node(struct vhost_user_scmi *vscmi, char *args)

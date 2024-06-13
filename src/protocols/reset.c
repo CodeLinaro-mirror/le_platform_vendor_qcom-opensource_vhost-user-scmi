@@ -10,37 +10,14 @@
 #include "iface_scmi_dev.h"
 #include "log.h"
 
-//define strlcpy to avoid the banned strncpy
-size_t strlcpy(char *dst, const char *src, size_t size)
-{
-    int copyed = 0;
-    int i;
-
-    if (!dst || !src || (size < 2))
-        return copyed;
-
-    for (i = 0; i < size - 1; i++) {
-        if (*src != '\0') {
-            *dst++ = *src++;
-            copyed++;
-        } else {
-            break;
-        }
-    }
-    *dst = '\0';
-
-    return copyed;
-}
-
-int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *id, scmi_rst_oper_t op)
+int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *name, scmi_rst_oper_t op)
 {
     memset(req, 0, sizeof(*req));
     req->proto = SCMI_PROTO_RESET;
     req->oper = op;
-    if (id)
-        strlcpy(req->name, id, NAME_LEN - 1);
+    strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
 
-    pr_debug("set reset: op=[%d]\n", op);
+    pr_debug("set reset: name=%s op=[%d]\n", req->name, op);
     return ioctl(fd, SCMI_IOCTL_RST, req);
 }
 
@@ -51,9 +28,11 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     uint32_t domain_id;
     uint32_t reset_flag, reset_state;
     uint32_t ret;
+    char name[MAX_DOMAIN_LENGTH];
     uint32_t channel_id;
     int fd;
     scmi_oper_ioctl_t request;
+    struct protocol_domain *proto_dm;
     uint32_t ret_len = 1;
 
     switch (hdr->msg_id) {
@@ -94,14 +73,20 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             pr_debug("msg type is protocol domain attribute \n");
             domain_id = req->params[0];
 
-            if (domain_id >= vscmi->rs_attr.domain_nums)
-                return -1;
+            proto_dm = get_dev_pd(&vscmi->dev_res, 0x16, domain_id);
+            if (!proto_dm) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                break;
+            }
+
             // currenlty, each domain_id has the same attribute.
 
             rsp->ret_values[ret_len++] = 0x0;
             rsp->ret_values[ret_len++] = 0xFFFFFFFF; //indicates this field is not supported by the platform
-            rsp->ret_values[ret_len++] = ('r' << 0) | ('e' << 8) | ('s' << 16) | ('e' << 24);
-            rsp->ret_values[ret_len++] = ('t' << 0) | (domain_id + '0') << 8 | ('\0' << 16);
+
+            add_domainid_to_name(proto_dm->domain_name, domain_id, name);
+            int n = strlcpy(&rsp->ret_values[ret_len], name, MAX_DOMAIN_LENGTH);
+            ret_len += n / 4 + 1;
  
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
@@ -109,14 +94,21 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             pr_debug("msg type is reset \n");
 
             domain_id = req->params[0];
+
+            proto_dm = get_dev_pd(&vscmi->dev_res, 0x16, domain_id);
+            if (!proto_dm) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                break;
+            }
             fd = get_dev_fd(&vscmi->dev_res, hdr->protocol_id, domain_id);
             if (fd < 0) {
                 pr_debug("could not find device \n");
-                return -1;
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                break;
             }
             reset_flag = req->params[1];
             reset_state = req->params[2];
-            ret = reset_operation_request(fd, &request,	NULL, SCMI_RST_RESET);
+            ret = reset_operation_request(fd, &request,	(char *)proto_dm->domain_name, SCMI_RST_RESET);
             if (ret < 0)
                 rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
             else
@@ -131,7 +123,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 
     rsp->hdr = req->hdr;
     *rsp_len = ret_len * 4;
-    return 0;
+    return ret;
 }
 
 void parse_reset_node(struct vhost_user_scmi *vscmi, char *args)

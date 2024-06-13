@@ -66,8 +66,11 @@ static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_sc
     }
     ops = find_protocol(hdr.protocol_id);
     if (ops && ops->req_process) {
-        ret = ops->req_process(vscmi, &hdr, req, req_len, rsp, rsp_len);
-        pr_debug("%s: rsp hdr = %x rsp_len =%d ret=%d \n",
+        if (ops->req_process(vscmi, &hdr, req, req_len, rsp, rsp_len) < 0)
+            pr_err("%s: ERROR: rsp hdr = %x rsp_len =%d ret=%d \n",
+                    __func__, rsp->hdr, *rsp_len, ret);
+        else
+            pr_debug("%s: rsp hdr = %x rsp_len =%d ret=%d \n",
                     __func__, rsp->hdr, *rsp_len, ret);
     } else {
         pr_err("The protocol %d is not supported \n", hdr.protocol_id);
@@ -171,7 +174,7 @@ usage(void)
             "-p/--power  <power domian nums>\n"
             "-r/--reset  <reset domian nums>\n"
             "-l/--log    log=<file/stdio>,[path=<path/to/logfile>],level=<info/debug>\n"
-            "-d/--device  <devicenmae,protocol/domainid,protocol/domainid,...>\n");
+            "-d/--device  <devicenmae,protocol/domainid/domainname,protocol/domainid/domainname,...>\n");
 }
 
 static int

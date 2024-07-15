@@ -90,7 +90,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             int n = strlcpy(&rsp->ret_values[ret_len], name, MAX_DOMAIN_LENGTH);
             ret_len += n / 4 + 1;
 
-            rsp->ret_values[ret_len++] = SCMI_RESP_STATUS_OK;
+            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
             pr_debug("msg type is power set for domain %d \n", domain_id);

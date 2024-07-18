@@ -57,6 +57,9 @@ struct perf_attributes {
 
 struct power_attributes {
     uint16_t domain_nums;
+#define MAX_POWER_DOMAIN 16
+    // record power status
+    uint32_t rps[MAX_POWER_DOMAIN];
 };
 
 struct reset_attributes {

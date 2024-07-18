@@ -33,8 +33,8 @@ static int get_sustained_perf_level(struct vhost_user_scmi *vscmi, uint32_t doma
         return -1;
     }
 
-    // TODO get from the real platform, currently just return the first level
-    return vscmi->pf_attr.pds[domain_id].level[0];
+    // TODO get from the real platform, currently just return 0
+    return 0;
 }
 
 static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
@@ -126,7 +126,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             rsp->ret_values[ret_len++] = 0;
             // sustained_freq - Base frequency corresponding to the
             // sustained performance level. Expressed in units of kHz.
-            rsp->ret_values[ret_len++] = 1000; // Currently hardcode here, may get from platform automatically.
+            rsp->ret_values[ret_len++] = 0; // Currently hardcode here, may get from platform automatically.
             // sustained_perf_level - The performance level value that corresponds to the sustained
             // performance delivered by the platform.
             sus_level = get_sustained_perf_level(vscmi, domainid);

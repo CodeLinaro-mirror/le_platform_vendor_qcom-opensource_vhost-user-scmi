@@ -92,7 +92,7 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
 
         pd->domain_id = atoi(stt);
 
-        if (strlen(st) > MAX_DOMAIN_LENGTH) {
+        if (strlen(st) > MAX_DOMAIN_LENGTH - 1) {
             pr_err("%s: IOCTL will fail as the name of domain is truncated, max name length is %d !!\n",
                 __func__, MAX_DOMAIN_LENGTH);
         }

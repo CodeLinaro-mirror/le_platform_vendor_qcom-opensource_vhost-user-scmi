@@ -28,6 +28,7 @@
 #define DOMAIN2CHANNEL(domain_id)  (domain_id)
 
 #define SCMI_PROTOCOL_EMUL_SET(x)   DATA_SET(scmi_protolol_set, x)
+#define MAX_DOMAIN_LENGTH  16
 
 struct virtio_scmi_request {
         le32 hdr;
@@ -43,7 +44,7 @@ struct perf_domain {
     uint16_t domain_id;
     uint16_t level_nums;
 #define MAX_PERF_LEVEL  16
-    uint16_t level[MAX_PERF_LEVEL];
+    uint32_t level[MAX_PERF_LEVEL];
 };
 
 struct perf_attributes {
@@ -63,6 +64,7 @@ struct reset_attributes {
 struct protocol_domain {
     uint16_t protocol_id;
     uint16_t domain_id;
+    char domain_name[MAX_DOMAIN_LENGTH];
 };
 // domian id + protocol id -> dev_fd
 struct device_map {
@@ -113,7 +115,7 @@ struct scmi_protocol_ops {
     char name[16];
     int id;
     int (*req_process)(struct vhost_user_scmi *, struct scmi_msg_info *, struct virtio_scmi_request *,
-        uint32_t, struct virtio_scmi_response *, uint32_t);
+        uint32_t, struct virtio_scmi_response *, uint32_t *);
 };
 
 

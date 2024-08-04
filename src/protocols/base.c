@@ -10,23 +10,25 @@
 
 static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
                         struct virtio_scmi_request *req, uint32_t req_len,
-                        struct virtio_scmi_response *rsp, uint32_t rsp_len)
+                        struct virtio_scmi_response *rsp, uint32_t *rsp_len)
 {
     int i, skip, idx;
+    uint32_t ret_len = 1;
+    uint32_t proto_idx = 0;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 0x20000;
+            rsp->ret_values[ret_len++] = 0x20000;
 
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = (1 /*agent number*/ << 8) | (vscmi->support_proto_nums << 0);
+            rsp->ret_values[ret_len++] = (1 /*agent number*/ << 8) | (vscmi->support_proto_nums << 0);
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
@@ -52,15 +54,15 @@ static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                      rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
             }
 
-            rsp->ret_values[1] = 0;
+            rsp->ret_values[ret_len++] = 0;
             break;
         case 0x3:
             pr_debug("msg type is discover vendor \n");
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[1] = 'Q' << 0 | 'u' << 8 | 'a' << 16 | 'l' << 24;
-            rsp->ret_values[2] = 'C' << 0 | 'o' << 8 | 'm' << 16 | 'm' << 24;
-            rsp->ret_values[3] = '\0';
+            rsp->ret_values[ret_len++] = 'Q' << 0 | 'u' << 8 | 'a' << 16 | 'l' << 24;
+            rsp->ret_values[ret_len++] = 'C' << 0 | 'o' << 8 | 'm' << 16 | 'm' << 24;
+            rsp->ret_values[ret_len++] = '\0';
             break;
         case 0x6:
             skip = req->params[0];
@@ -68,13 +70,19 @@ static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
 
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
             if (skip >= vscmi->support_proto_nums)
-                rsp->ret_values[1] = 0;
+                rsp->ret_values[ret_len++] = 0;
             else
-                rsp->ret_values[1] = vscmi->support_proto_nums - skip;
+                rsp->ret_values[ret_len++] = vscmi->support_proto_nums - skip;
+
+            // prepare array of protocols
+            proto_idx = ret_len;
+
             for (i = 0; i < vscmi->support_proto_nums; i++) {
-                idx = 2 + i / 4;
-                if (i % 4 == 0)
+                idx = proto_idx + i / 4;
+                if (i % 4 == 0) {
                     rsp->ret_values[idx] = 0;
+                    ret_len++;
+                }
                 rsp->ret_values[idx] |= vscmi->protos[i] << ((i % 4) * 8);
             }
             break;
@@ -83,6 +91,7 @@ static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             break;
     }
     rsp->hdr = req->hdr;
+    *rsp_len = ret_len * 4;
 
     return 0;
 }

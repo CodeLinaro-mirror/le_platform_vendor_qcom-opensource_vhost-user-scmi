@@ -29,6 +29,7 @@
 
 #define SCMI_PROTOCOL_EMUL_SET(x)   DATA_SET(scmi_protolol_set, x)
 #define MAX_DOMAIN_LENGTH  16
+#define MAX_TRANSFER_LEVEL 10
 
 struct virtio_scmi_request {
         le32 hdr;
@@ -45,16 +46,20 @@ struct perf_domain {
     uint16_t level_nums;
 #define MAX_PERF_LEVEL  16
     uint32_t level[MAX_PERF_LEVEL];
+    uint32_t left_levels;
 };
 
 struct perf_attributes {
     uint16_t domain_nums;
-#define MAX_PERF_DOMAIN 16
+#define MAX_PERF_DOMAIN 32
     struct perf_domain pds[MAX_PERF_DOMAIN];
 };
 
 struct power_attributes {
     uint16_t domain_nums;
+#define MAX_POWER_DOMAIN 16
+    // record power status
+    uint32_t rps[MAX_POWER_DOMAIN];
 };
 
 struct reset_attributes {

@@ -33,8 +33,8 @@ static int get_sustained_perf_level(struct vhost_user_scmi *vscmi, uint32_t doma
         return -1;
     }
 
-    // TODO get from the real platform, currently just return the first level
-    return vscmi->pf_attr.pds[domain_id].level[0];
+    // TODO get from the real platform, currently just return 0
+    return 0;
 }
 
 static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_info *hdr,
@@ -126,7 +126,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             rsp->ret_values[ret_len++] = 0;
             // sustained_freq - Base frequency corresponding to the
             // sustained performance level. Expressed in units of kHz.
-            rsp->ret_values[ret_len++] = 1000; // Currently hardcode here, may get from platform automatically.
+            rsp->ret_values[ret_len++] = 0; // Currently hardcode here, may get from platform automatically.
             // sustained_perf_level - The performance level value that corresponds to the sustained
             // performance delivered by the platform.
             sus_level = get_sustained_perf_level(vscmi, domainid);
@@ -159,14 +159,29 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
                 break;
             }
+
+            if (level_start == 0) {
+                 pd->left_levels = pd->level_nums;
+            }
             /* level_nums
              * Bits[31:16] Number of remaining performance levels.
              * Bits[15:12] Reserved, must be zero.
              * Bits[11:0] Number of performance levels that are returned by this call.
             */
-            rsp->ret_values[ret_len++] = (0 /*no remaining levles*/ << 16) |
-                    (pd->level_nums - level_start /*number of level*/) << 0;
-            for (i = level_start; i < pd->level_nums; i++) {
+            int trans_levels = pd->left_levels > MAX_TRANSFER_LEVEL ? MAX_TRANSFER_LEVEL : pd->left_levels;
+            // record the left level
+            pd->left_levels -= trans_levels;
+
+            if ((level_start + trans_levels) > pd->level_nums) {
+                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                pr_err("ERROR: please make sure the level_start is continous!!\n");
+                break;
+            }
+
+            rsp->ret_values[ret_len++] = (pd->left_levels << 16) |
+                    (trans_levels /*number of level*/) << 0;
+
+            for (i = level_start; i < (level_start + trans_levels) && i < pd->level_nums; i++) {
                 rsp->ret_values[ret_len++] = pd->level[i];
                 // Power cost. A value of zero indicates that the power cost is not reported by the platform.
                 rsp->ret_values[ret_len++] = 0;
@@ -239,19 +254,20 @@ void parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
         if (!st) break;
 
         pd = &pa->pds[pa->domain_nums++];
-        if (pa->domain_nums >= MAX_PERF_DOMAIN) {
+        if (pa->domain_nums > MAX_PERF_DOMAIN) {
             pr_err("too many domain!\n");
             break;
         }
         pd->domain_id = atoi(stt);
         while (sttt = strsep(&st, ":")) {
             pd->level[pd->level_nums++] = atoi(sttt);
-            if (pd->level_nums >= MAX_PERF_LEVEL) {
+            if (pd->level_nums > MAX_PERF_LEVEL) {
                 pr_err("too many level!\n");
                 break;
             }
             pr_debug("domain = %d level = %d\n", pd->domain_id, atoi(sttt));
         }
+        pd->left_levels = pd->level_nums;
     }
     free(sr);
     add_to_protocol_list(vscmi, 0x13);

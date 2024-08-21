@@ -22,6 +22,21 @@ vhost-user-scmi B/E process, which will emulate a scmi platform, and receive scm
 
 %install
 %cmake_install
+mkdir -p %{buildroot}%{_unitdir}
+mkdir -p %{buildroot}%{_unitdir}/multi-user.target.wants
+install -DpZm 0644 vhost-user-scmi.service %{buildroot}%{_unitdir}
+pushd %{buildroot}%{_unitdir} && %{__ln_s} -r vhost-user-scmi.service multi-user.target.wants/vhost-user-scmi.service && popd
+
+%post
+%systemd_post vhost-user-scmi.service
+
+%preun
+%systemd_preun vhost-user-scmi.service
+
+%postun
+%systemd_postun_with_restart vhost-user-scmi.service
 
 %files
 %{_bindir}/vhost-user-scmi
+%{_unitdir}/vhost-user-scmi.service
+%{_unitdir}/multi-user.target.wants/vhost-user-scmi.service

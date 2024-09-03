@@ -1,0 +1,22 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+[Unit]
+Description=Service to start the vhost-user-scmi
+
+After= remote-fs.target
+
+Before = qcrosvm.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vhost-user-scmi \
+-l level=debug \
+-s /tmp/pt-dev-skt \
+-f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000 \
+-p 4 \
+-d /dev/scmi_uart17,19/0/perf,17/0/power \
+-d /dev/scmi_pcie0,17/1/power \
+-d /dev/scmi_wlan,17/2/power_regulator,17/3/power_gpio
+
+[Install]
+WantedBy = multi-user.target

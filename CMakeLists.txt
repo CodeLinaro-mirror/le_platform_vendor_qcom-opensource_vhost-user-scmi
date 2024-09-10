@@ -14,6 +14,7 @@ set(VHOST_USER_SCMI_SOURCE_FILES
   src/access_control.c
   src/worker.c
   src/log.c
+  src/list.c
   src/protocols/base.c
   src/protocols/perf.c
   src/protocols/reset.c

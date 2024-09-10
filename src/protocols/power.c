@@ -160,7 +160,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             pr_debug("get power state = 0x%x \n", pa->rps_list[domain_id].data);
             break;
         default:
-            pr_err("msg id %d is not support\n", hdr->msg_id);
+            pr_err("[Error] msg id %d is not support\n", hdr->msg_id);
             rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
             break;
     }
@@ -170,7 +170,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     return ret;
 }
 
-void parse_power_node(struct vhost_user_scmi *vscmi, char *args)
+int parse_power_node(struct vhost_user_scmi *vscmi, char *args)
 {
     struct power_attributes *pa = &vscmi->pw_attr;
     int i;
@@ -178,7 +178,11 @@ void parse_power_node(struct vhost_user_scmi *vscmi, char *args)
     pa->domain_nums = atoi(args);
     pr_debug("power domian num is %d\n", pa->domain_nums);
 
-    assert(pa->domain_nums <= MAX_POWER_DOMAIN);
+    if (pa->domain_nums > MAX_POWER_DOMAIN) {
+        pr_err("[Error] power domain number should not larger than %d\n",
+            MAX_POWER_DOMAIN);
+        return -1;
+    }
     memset(pa->rps_list, 0, sizeof(list_t) * MAX_POWER_DOMAIN);
 
     for (i = 0; i < pa->domain_nums; i++)
@@ -188,6 +192,7 @@ void parse_power_node(struct vhost_user_scmi *vscmi, char *args)
     pa->rps_tail = NULL;
 
     add_to_protocol_list(vscmi, 0x11);
+    return 0;
 }
 
 static void scmi_power_reset(struct vhost_user_scmi *vscmi)
@@ -218,7 +223,7 @@ static void scmi_power_reset(struct vhost_user_scmi *vscmi)
         if ((fd > 0) && (proto_dm != NULL) && (domain_poweron->data == POWER_STATE_ON)) {
             ret = power_operation_request(fd, &request, (char *)proto_dm->domain_name, SCMI_PWR_OFF);
             if (ret < 0) {
-                pr_err("[reset] failed to power off domain %d ret=%d !!\n", domain_id, ret);
+                pr_err("[Error] [reset] failed to power off domain %d ret=%d !!\n", domain_id, ret);
             } else {
                 domain_poweron->data = POWER_STATE_OFF;
                 pr_debug("[reset]: power off domain %d\n", domain_id);

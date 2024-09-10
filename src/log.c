@@ -21,7 +21,7 @@ static int log_fd = STDOUT;
 #define DEBUG_LEVEL 2
 static uint8_t log_level = INFO_LEVEL;
 
-void parse_log_node(char *args)
+int parse_log_node(char *args)
 {
     int log_file = 0;
     int log_stdio = 0;
@@ -69,6 +69,7 @@ void parse_log_node(char *args)
         log_fd = STDOUT;
     }
     free(sr);
+    return 0;
 }
 
 void log_exit(void)

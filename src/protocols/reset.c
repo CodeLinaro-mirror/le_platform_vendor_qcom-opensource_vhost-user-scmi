@@ -116,7 +116,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             break;
 
         default:
-            pr_err("msg id %d is not support\n", hdr->msg_id);
+            pr_err("[Error] msg id %d is not support\n", hdr->msg_id);
             rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
             break;
     }
@@ -126,13 +126,20 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
     return ret;
 }
 
-void parse_reset_node(struct vhost_user_scmi *vscmi, char *args)
+int parse_reset_node(struct vhost_user_scmi *vscmi, char *args)
 {
     struct reset_attributes *ra = &vscmi->rs_attr;
 
     ra->domain_nums = atoi(args);
+    if (ra->domain_nums >= MAX_RESET_DOMAIN) {
+        pr_err("[Error] reset domain number should not larger than %d\n",
+            MAX_RESET_DOMAIN);
+        return -1;
+    }
+
     pr_debug("reset domian num is %d\n", ra->domain_nums);
     add_to_protocol_list(vscmi, 0x16);
+    return 0;
 }
 
 static void scmi_reset_reset(struct vhost_user_scmi *vscmi)

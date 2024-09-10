@@ -141,9 +141,24 @@ static void scmi_process_vq(void *data)
     pr_debug("finish process\n");
 }
 
+static void scmi_device_reset(struct vhost_user_scmi *vscmi)
+{
+    struct scmi_protocol_ops **opspp, *opsp;
+
+    if (!vscmi)
+        return;
+
+    SET_FOREACH(opspp, scmi_protolol_set) {
+        opsp = *opspp;
+        if (opsp->reset)
+            opsp->reset(vscmi);
+    }
+}
+
 static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32_t state)
 {
     struct vhost_virtqueue *vq = dev->virtqueue[idx];
+    struct vhost_user_scmi *vscmi = container_of(dev, struct vhost_user_scmi, dev);
     int ret = 0;
 
     pr_debug("set vring state to %s \n", state ? "enable" : "disable");
@@ -151,6 +166,7 @@ static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32
         ret = start_watch_on_fd(vq->kickfd, scmi_process_vq, vq);
     } else {
         stop_watch_on_fd(vq->kickfd);
+        scmi_device_reset(vscmi);
     }
 
     return ret;

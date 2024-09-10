@@ -135,10 +135,16 @@ void parse_reset_node(struct vhost_user_scmi *vscmi, char *args)
     add_to_protocol_list(vscmi, 0x16);
 }
 
+static void scmi_reset_reset(struct vhost_user_scmi *vscmi)
+{
+
+}
+
 struct scmi_protocol_ops reset_ops = {
     .name = "reset",
     .id = 0x16,
     .req_process = scmi_reset_req_process,
+    .reset = scmi_reset_reset,
 };
 
 SCMI_PROTOCOL_EMUL_SET(reset_ops);

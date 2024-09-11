@@ -27,7 +27,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 {
     uint32_t domain_id;
     uint32_t reset_flag, reset_state;
-    uint32_t ret;
+    uint32_t ret = 0;
     char name[MAX_DOMAIN_LENGTH];
     uint32_t channel_id;
     int fd;

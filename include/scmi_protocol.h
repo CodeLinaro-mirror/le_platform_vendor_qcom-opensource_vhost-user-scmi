@@ -67,6 +67,7 @@ struct power_attributes {
     list_t *rps_tail;
 };
 
+#define MAX_RESET_DOMAIN 16
 struct reset_attributes {
     uint16_t domain_nums;
 };
@@ -130,8 +131,8 @@ struct scmi_protocol_ops {
 };
 
 
-void parse_power_node(struct vhost_user_scmi *vscmi, char *args);
-void parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
-void parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_power_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
 #endif
 

@@ -174,10 +174,16 @@ void parse_power_node(struct vhost_user_scmi *vscmi, char *args)
     add_to_protocol_list(vscmi, 0x11);
 }
 
+static void scmi_power_reset(struct vhost_user_scmi *vscmi)
+{
+
+}
+
 struct scmi_protocol_ops power_ops = {
     .name = "power",
     .id = 0x11,
     .req_process = scmi_power_req_process,
+    .reset = scmi_power_reset,
 };
 
 SCMI_PROTOCOL_EMUL_SET(power_ops);

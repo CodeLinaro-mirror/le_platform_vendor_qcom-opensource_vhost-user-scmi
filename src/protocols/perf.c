@@ -273,10 +273,15 @@ void parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
     add_to_protocol_list(vscmi, 0x13);
 }
 
+static void scmi_perf_reset(struct vhost_user_scmi *vscmi)
+{
+
+}
 struct scmi_protocol_ops perf_ops = {
     .name = "perf",
     .id = 0x13,
     .req_process = scmi_perf_req_process,
+    .reset = scmi_perf_reset,
 };
 
 SCMI_PROTOCOL_EMUL_SET(perf_ops);

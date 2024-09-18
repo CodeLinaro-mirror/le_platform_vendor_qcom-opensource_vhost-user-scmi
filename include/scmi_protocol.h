@@ -121,6 +121,7 @@ struct scmi_protocol_ops {
     int id;
     int (*req_process)(struct vhost_user_scmi *, struct scmi_msg_info *, struct virtio_scmi_request *,
         uint32_t, struct virtio_scmi_response *, uint32_t *);
+    void (*reset)(struct vhost_user_scmi *);
 };
 
 

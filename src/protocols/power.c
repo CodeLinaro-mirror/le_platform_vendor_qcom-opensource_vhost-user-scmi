@@ -38,7 +38,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 {
     uint32_t domain_id;
     uint32_t power_stat;
-    uint32_t ret;
+    uint32_t ret = 0;
     uint32_t channel_id;
     char name[MAX_DOMAIN_LENGTH];
     scmi_oper_ioctl_t request;

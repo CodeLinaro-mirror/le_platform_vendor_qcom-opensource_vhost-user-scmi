@@ -253,7 +253,7 @@ register_to_vmm_service(void)
 // add states for vhost user be, if was waiting, return success.
 // if is recvmsg, close the fd, deinit device, return success.
 // wait for status to change to done
-
+    return 0;
 }
 
 bool check_and_add(uint32_t *domain_list, uint32_t *num, uint32_t domain_id)

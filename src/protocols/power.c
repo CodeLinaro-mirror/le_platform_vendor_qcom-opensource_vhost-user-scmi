@@ -10,6 +10,7 @@
 #include "access_control.h"
 #include "iface_scmi_dev.h"
 #include "log.h"
+#include "list.h"
 
 #define POWER_TYPEID_MASK  ((1UL << 28) - 1)
 #define POWER_STATETYPE_SHFIT 30
@@ -131,7 +132,17 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
                 rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
             else {
                 rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-                pa->rps[domain_id] = power_stat;
+                pa->rps_list[domain_id].data = power_stat;
+                if (pwr_oper == SCMI_PWR_ON) {
+                    // only record power on domain in the list
+                    list_push(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                    pr_debug("[power] record poweron domain%d to list\n", domain_id);
+                } else {
+                    // if the power is off, remove the domain from list
+                    ret = list_remove(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                    pr_debug("[power] remove poweron domain%d from list, ret=%d\n", domain_id, ret);
+                }
+                //list_print(pa->rps_head, pa->rps_tail);
             }
             break;
         case 0x5:
@@ -145,8 +156,8 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             }
             // Currently no IOCTL for to get power state, so just return the record state.
             rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = pa->rps[domain_id];
-            pr_debug("get power state = 0x%x \n", pa->rps[domain_id]);
+            rsp->ret_values[ret_len++] = pa->rps_list[domain_id].data;
+            pr_debug("get power state = 0x%x \n", pa->rps_list[domain_id].data);
             break;
         default:
             pr_err("msg id %d is not support\n", hdr->msg_id);
@@ -165,17 +176,55 @@ void parse_power_node(struct vhost_user_scmi *vscmi, char *args)
     int i;
 
     pa->domain_nums = atoi(args);
-    assert(pa->domain_nums <= MAX_POWER_DOMAIN);
-
     pr_debug("power domian num is %d\n", pa->domain_nums);
+
+    assert(pa->domain_nums <= MAX_POWER_DOMAIN);
+    memset(pa->rps_list, 0, sizeof(list_t) * MAX_POWER_DOMAIN);
+
     for (i = 0; i < pa->domain_nums; i++)
-        pa->rps[i] = POWER_STATE_OFF;
+        pa->rps_list[i].data = POWER_STATE_OFF;
+
+    pa->rps_head = NULL;
+    pa->rps_tail = NULL;
 
     add_to_protocol_list(vscmi, 0x11);
 }
 
 static void scmi_power_reset(struct vhost_user_scmi *vscmi)
 {
+    // turn off the power for all domains.
+    scmi_oper_ioctl_t request;
+    uint16_t domain_id;
+    int fd, ret;
+    struct power_attributes *pa = &vscmi->pw_attr;
+    struct protocol_domain *proto_dm;
+    list_t *domain_poweron;
+
+    pr_debug("start power reset..\n");
+
+    //list_print(pa->rps_head, pa->rps_tail);
+    do {
+        domain_poweron = list_pop(&pa->rps_head, &pa->rps_tail);
+        if (!domain_poweron)
+            break;
+        domain_id = domain_poweron - &pa->rps_list[0];
+        pr_debug("[reset] got domain_id = %d in the list \n", domain_id);
+
+        if (domain_id >= MAX_POWER_DOMAIN)
+            break;
+        // get the device fd which use the domain
+        fd = get_dev_fd(&vscmi->dev_res, 0x11, domain_id);
+        proto_dm = get_dev_pd(&vscmi->dev_res, 0x11, domain_id);
+        if ((fd > 0) && (proto_dm != NULL) && (domain_poweron->data == POWER_STATE_ON)) {
+            ret = power_operation_request(fd, &request, (char *)proto_dm->domain_name, SCMI_PWR_OFF);
+            if (ret < 0) {
+                pr_err("[reset] failed to power off domain %d ret=%d !!\n", domain_id, ret);
+            } else {
+                domain_poweron->data = POWER_STATE_OFF;
+                pr_debug("[reset]: power off domain %d\n", domain_id);
+            }
+        }
+    } while (pa->rps_head);
 
 }
 

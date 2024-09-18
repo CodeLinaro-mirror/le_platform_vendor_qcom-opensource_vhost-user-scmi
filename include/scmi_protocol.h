@@ -10,6 +10,7 @@
 #include "resource.h"
 #include "type.h"
 #include "vhost_user.h"
+#include "list.h"
 
 #define SCMI_RESP_STATUS_OK 0
 #define SCMI_RESP_STATUS_NOT_SUPPORT -1
@@ -59,7 +60,11 @@ struct power_attributes {
     uint16_t domain_nums;
 #define MAX_POWER_DOMAIN 16
     // record power status
-    uint32_t rps[MAX_POWER_DOMAIN];
+    list_t rps_list[MAX_POWER_DOMAIN];
+    // point to the list head;
+    list_t *rps_head;
+    // point to the list tail;
+    list_t *rps_tail;
 };
 
 struct reset_attributes {

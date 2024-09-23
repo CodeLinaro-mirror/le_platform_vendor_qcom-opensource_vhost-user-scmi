@@ -56,9 +56,10 @@ static void *worker_thr(void *arg)
                 do {
 					len = read(fd, buf, sizeof(buf));
 				} while (len == 20);
-                pr_debug("handle virtio request fd = %d\n", fi->fd);
-                if (fi && fi->cb)
+                if (fi && fi->cb) {
+                    pr_debug("handle virtio request fd = %d\n", fi->fd);
                    (fi->cb)(fi->data);
+                }
             }
         }
         pthread_mutex_unlock(&fdmutex);

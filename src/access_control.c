@@ -18,7 +18,7 @@ void add_domainid_to_name(char *org, uint32_t domain_id, char *new)
     int i;
     char *new_p = new;
     if (domain_id > 999) {
-        pr_err("domain id is too large, domain name will be truncated !!\n");
+        pr_err("[Error] domain id is too large, domain name will be truncated !!\n");
     }
     // leave 3 bytes for domain_id
     // leave 1 byte for \0
@@ -55,7 +55,7 @@ size_t strlcpy(char *dst, const char *src, size_t size)
     return copyed;
 }
 
-void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
+int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
 {
     struct device_resource *dr = &vscmi->dev_res;
     struct device_map *dm;
@@ -69,14 +69,19 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
     sr = sn = strdup(args);
     name = strsep(&sn, ",");
     if (!name || !sn)
-        return;
+        return 0;
     snprintf(dev_path, 20, "%s", name);
 
     pr_debug("find device : %s\n", dev_path);
-    fd = open(dev_path, O_RDWR);
+
+    if (dr->device_nums >= MAX_DEVICE_NUM) {
+        pr_err("[Error] too many devices, max device number is %d!!\n", MAX_DEVICE_NUM);
+        return -1;
+    }
+    fd = open(dev_path, O_RDWR | O_EXCL);
     if (fd <=0) {
-        pr_err("failed to open %s\n", dev_path);
-        return;
+        pr_err("[Error] failed to open %s\n", dev_path);
+        return -1;
     }
 
     dm = &dr->dev_map[dr->device_nums++];
@@ -84,6 +89,10 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
     while(st = strsep(&sn, ",")) {
         stt = strsep(&st, "/");
         if (!st | !stt) break;
+        if (dm->pd_nums >= MAX_PROTOCOL_NUM) {
+            pr_err("[Error] too many protocols for %s, max number is %d!!\n", dev_path, MAX_PROTOCOL_NUM);
+            return -1;
+        }
         pd = &dm->prot_doms[dm->pd_nums++];
         pd->protocol_id = atoi(stt);
 
@@ -93,7 +102,7 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
         pd->domain_id = atoi(stt);
 
         if (strlen(st) > MAX_DOMAIN_LENGTH - 1) {
-            pr_err("%s: IOCTL will fail as the name of domain is truncated, max name length is %d !!\n",
+            pr_err("[Error] %s: IOCTL will fail as the name of domain is truncated, max name length is %d !!\n",
                 __func__, MAX_DOMAIN_LENGTH);
         }
         snprintf(pd->domain_name, MAX_DOMAIN_LENGTH, "%s", st);
@@ -103,6 +112,7 @@ void parse_device_node(struct vhost_user_scmi *vscmi, char *args)
 
     }
     free(sr);
+    return 0;
 }
 
 int get_dev_fd(struct device_resource *dev_res, int protocol, int domain_id)
@@ -159,7 +169,6 @@ bool access_is_ok_for_protocol(struct vhost_user_scmi *vscmi, int protocol)
             return true;
     }
 
-    pr_debug("could not find access for protocol %d\n", protocol);
     return false;
 }
 
@@ -172,7 +181,7 @@ void add_to_protocol_list(struct vhost_user_scmi *vscmi, int protocol)
     if (vscmi->support_proto_nums < MAX_PROTOCOL_NUM)
         vscmi->protos[vscmi->support_proto_nums] = protocol;
     else
-        pr_err("too much protocol!!!\n");
+        pr_err("[Error] too much protocol!!!\n");
 
     vscmi->support_proto_nums++;
 }

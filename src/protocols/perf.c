@@ -29,7 +29,7 @@ int perf_operation_request(int fd, scmi_oper_ioctl_t *req, char *name, int level
 static int get_sustained_perf_level(struct vhost_user_scmi *vscmi, uint32_t domain_id)
 {
     if (domain_id >= vscmi->pf_attr.domain_nums) {
-        pr_err("not support such domain id\n");
+        pr_err("[Error] not support such domain id\n");
         return -1;
     }
 
@@ -174,7 +174,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
 
             if ((level_start + trans_levels) > pd->level_nums) {
                 rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
-                pr_err("ERROR: please make sure the level_start is continous!!\n");
+                pr_err("[Error] ERROR: please make sure the level_start is continous!!\n");
                 break;
             }
 
@@ -239,13 +239,14 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
     return ret;
 }
 
-void parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
+int parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
 {
     // perf,{domainid:level_0:level_1:..level_n}
     // perf,{0:1|2},{1:1|2|3}
     struct perf_attributes *pa = &vscmi->pf_attr;
     struct perf_domain *pd;
     char *sr, *sn, *st, *stt, *sttt;
+    int ret = 0;
 
     sr = sn = strdup(args);
    // make sure pa is clear during initates.
@@ -253,30 +254,44 @@ void parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
         stt = strsep(&st, "/");
         if (!st) break;
 
-        pd = &pa->pds[pa->domain_nums++];
-        if (pa->domain_nums > MAX_PERF_DOMAIN) {
-            pr_err("too many domain!\n");
-            break;
+        if (pa->domain_nums >= MAX_PERF_DOMAIN) {
+            pr_err("[Error] perf domain number should not larger than %d\n",
+                        MAX_PERF_DOMAIN);
+            goto err;
         }
+
+        pd = &pa->pds[pa->domain_nums++];
+
         pd->domain_id = atoi(stt);
         while (sttt = strsep(&st, ":")) {
-            pd->level[pd->level_nums++] = atoi(sttt);
-            if (pd->level_nums > MAX_PERF_LEVEL) {
-                pr_err("too many level!\n");
-                break;
+            if (pd->level_nums >= MAX_PERF_LEVEL) {
+                pr_err("[Error] perf levels should not larger than %d \n",
+                        MAX_PERF_LEVEL);
+                goto err;
             }
+            pd->level[pd->level_nums++] = atoi(sttt);
             pr_debug("domain = %d level = %d\n", pd->domain_id, atoi(sttt));
         }
         pd->left_levels = pd->level_nums;
     }
     free(sr);
     add_to_protocol_list(vscmi, 0x13);
+    return 0;
+
+err:
+    free(sr);
+    return -1;
 }
 
+static void scmi_perf_reset(struct vhost_user_scmi *vscmi)
+{
+
+}
 struct scmi_protocol_ops perf_ops = {
     .name = "perf",
     .id = 0x13,
     .req_process = scmi_perf_req_process,
+    .reset = scmi_perf_reset,
 };
 
 SCMI_PROTOCOL_EMUL_SET(perf_ops);

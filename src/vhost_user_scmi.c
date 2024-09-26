@@ -67,13 +67,13 @@ static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_sc
     ops = find_protocol(hdr.protocol_id);
     if (ops && ops->req_process) {
         if (ops->req_process(vscmi, &hdr, req, req_len, rsp, rsp_len) < 0)
-            pr_err("%s: ERROR: rsp hdr = %x rsp_len =%d ret=%d \n",
+            pr_err("[Error] %s: ERROR: rsp hdr = %x rsp_len =%d ret=%d \n",
                     __func__, rsp->hdr, *rsp_len, ret);
         else
             pr_debug("%s: rsp hdr = %x rsp_len =%d ret=%d \n",
                     __func__, rsp->hdr, *rsp_len, ret);
     } else {
-        pr_err("The protocol %d is not supported \n", hdr.protocol_id);
+        pr_err("[Error] The protocol %d is not supported \n", hdr.protocol_id);
         ret = -1;
     }
     return ret;
@@ -96,7 +96,7 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
     smp_mb();
     while (vq_has_data(vq)) {
         if (vq_getchain(vq, iov, 2, &idx) != 2) {
-            pr_err("message is not correct!\n");
+            pr_err("[Error] message is not correct!\n");
             return false;
         }
         req = iov[0].iov_base;
@@ -106,7 +106,7 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
         ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, &rsp_len);
         if (!ret) {
             if (rsp_len > (iov[1].iov_len - sizeof(rsp->hdr))) {
-                pr_err("response size is too large! \n");
+                pr_err("[Error] response size is too large! \n");
             } else {
                 vq_relchain(vq, idx, rsp_len + sizeof(rsp->hdr));
             }
@@ -141,9 +141,24 @@ static void scmi_process_vq(void *data)
     pr_debug("finish process\n");
 }
 
+static void scmi_device_reset(struct vhost_user_scmi *vscmi)
+{
+    struct scmi_protocol_ops **opspp, *opsp;
+
+    if (!vscmi)
+        return;
+
+    SET_FOREACH(opspp, scmi_protolol_set) {
+        opsp = *opspp;
+        if (opsp->reset)
+            opsp->reset(vscmi);
+    }
+}
+
 static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32_t state)
 {
     struct vhost_virtqueue *vq = dev->virtqueue[idx];
+    struct vhost_user_scmi *vscmi = container_of(dev, struct vhost_user_scmi, dev);
     int ret = 0;
 
     pr_debug("set vring state to %s \n", state ? "enable" : "disable");
@@ -151,6 +166,7 @@ static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32
         ret = start_watch_on_fd(vq->kickfd, scmi_process_vq, vq);
     } else {
         stop_watch_on_fd(vq->kickfd);
+        scmi_device_reset(vscmi);
     }
 
     return ret;
@@ -181,6 +197,8 @@ static int
 parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
 {
     int opt;
+    int ret = 0;
+
     static struct option long_options[] = {
         {"sock",    required_argument, 0,  's' },
         {"power",   required_argument, 0,  'p' },
@@ -192,8 +210,8 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
         {0,         0,                 0,  0 }
     };
 
-    while ((opt = getopt_long(argc, argv, "s:p:f:r:d:l:h",
-                        long_options, NULL)) != -1) {
+    while (((opt = getopt_long(argc, argv, "s:p:f:r:d:l:h",
+                        long_options, NULL)) != -1) && (!ret)) {
         switch (opt) {
             case 's':
                 if (snprintf(vscmi->sock_path, 256, "%s", optarg) > 256) {
@@ -202,19 +220,19 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
                 }
                 break;
             case 'p':
-                parse_power_node(vscmi, optarg);
+                ret = parse_power_node(vscmi, optarg);
                 break;
             case 'f':
-                parse_perf_node(vscmi, optarg);
+                ret = parse_perf_node(vscmi, optarg);
                 break;
             case 'r':
-                parse_reset_node(vscmi, optarg);
+                ret = parse_reset_node(vscmi, optarg);
                 break;
             case 'd':
-                parse_device_node(vscmi, optarg);
+                ret = parse_device_node(vscmi, optarg);
                 break;
             case 'l':
-                parse_log_node(optarg);
+                ret = parse_log_node(optarg);
                 break;
             case 'h':
             default:
@@ -223,7 +241,7 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
         }
     }
 
-    return 0;
+    return ret;
 }
 
 int
@@ -235,7 +253,75 @@ register_to_vmm_service(void)
 // add states for vhost user be, if was waiting, return success.
 // if is recvmsg, close the fd, deinit device, return success.
 // wait for status to change to done
+    return 0;
+}
 
+bool check_and_add(uint32_t *domain_list, uint32_t *num, uint32_t domain_id)
+{
+    int i;
+
+    for (i = 0; i < *num; i++) {
+        if (domain_list[i] == domain_id) {
+            return false;
+        }
+    }
+    domain_list[*num] = domain_id;
+    *num = *num + 1; 
+    return true;
+}
+
+static int sanity_check(struct vhost_user_scmi *vscmi)
+{
+    struct device_resource *dev_res = &vscmi->dev_res;
+    struct perf_attributes *perf = &vscmi->pf_attr;      
+    struct power_attributes *power = &vscmi->pw_attr;      
+    struct reset_attributes *reset = &vscmi->rs_attr;      
+
+    uint32_t perf_domains[MAX_PERF_DOMAIN] = {0};
+    uint32_t power_domains[MAX_POWER_DOMAIN] = {0};
+    uint32_t reset_domains[MAX_RESET_DOMAIN] = {0};
+
+    uint32_t perf_n = 0;
+    uint32_t power_n = 0;
+    uint32_t reset_n = 0;
+
+    int i, j;
+    struct device_map *dm;
+    struct protocol_domain *pd;
+
+    for (i = 0; i < dev_res->device_nums; i++) {
+        dm = &dev_res->dev_map[i];
+        for (j = 0; j < dm->pd_nums; j++) {
+            pd = &dm->prot_doms[j];
+            switch (pd->protocol_id) {
+                case 0x11:
+                    // power
+                    if ((pd->domain_id >= power->domain_nums) ||
+                        (!check_and_add(power_domains, &power_n, pd->domain_id)))
+                        goto err;
+                    break;
+                case 0x13:
+                    // perf
+                    if ((pd->domain_id >= perf->domain_nums) ||
+                        (!check_and_add(perf_domains, &perf_n, pd->domain_id)))
+                        goto err;
+                    break;
+                case 0x16:
+                    //reset
+                    if ((pd->domain_id >= reset->domain_nums) ||
+                        (!check_and_add(reset_domains, &reset_n, pd->domain_id)))
+                        goto err;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    return 0;
+
+err:
+    pr_err("[Error] use duplicated or non exist domain id %d for protocol %d !\n", pd->domain_id, pd->protocol_id);
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -247,16 +333,19 @@ int main(int argc, char **argv)
 
     vscmi = calloc(sizeof(struct vhost_user_scmi), 1);
     if (!vscmi) {
-        printf("failed to alloc vscmi structure!\n");
+        pr_err("[Error] failed to alloc vscmi structure!\n");
         return -1;
     }
     if (parse_args(vscmi, argc, argv) < 0)
         goto err;
 
     if (!vscmi->sock_path) {
-        printf("please provide socket file name\n");
+        pr_err("[Error] please provide socket file name\n");
         goto err;
     }
+
+    if (sanity_check(vscmi) < 0)
+        goto err;
 
     vscmi->features = SCMI_VIRTIO_FEATURES;
     register_to_vmm_service();
@@ -264,7 +353,7 @@ int main(int argc, char **argv)
 loop:
     pr_debug("vhost user wait for connect..\n");
     if (vhost_user_wait_for_connect(&vscmi->dev, vscmi->sock_path) < 0) {
-        pr_err("failed to make connection with client\n");
+        pr_err("[Error] failed to make connection with client\n");
         ret = -1;
         goto err;
     }
@@ -275,8 +364,8 @@ loop:
     }
 
     pr_debug("vhost user start loop..\n");
-    ret = vhost_user_start_loop(&vscmi->dev);
-    pr_debug("vhost user loop exit, ret = %d \n", ret);
+    vhost_user_start_loop(&vscmi->dev);
+    pr_debug("vhost user loop exit\n");
 
     vhost_user_deinit_device(&vscmi->dev);
 
@@ -284,9 +373,10 @@ loop:
         goto loop;
 
     kill_worker();
+
+err:
     log_exit();
     access_exit(vscmi);
-err:
     // or do other operations which is needed when the thread is out.
     if (vscmi) {
         free(vscmi);

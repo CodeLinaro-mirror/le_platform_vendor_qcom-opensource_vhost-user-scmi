@@ -10,6 +10,7 @@
 #include "resource.h"
 #include "type.h"
 #include "vhost_user.h"
+#include "list.h"
 
 #define SCMI_RESP_STATUS_OK 0
 #define SCMI_RESP_STATUS_NOT_SUPPORT -1
@@ -59,9 +60,14 @@ struct power_attributes {
     uint16_t domain_nums;
 #define MAX_POWER_DOMAIN 16
     // record power status
-    uint32_t rps[MAX_POWER_DOMAIN];
+    list_t rps_list[MAX_POWER_DOMAIN];
+    // point to the list head;
+    list_t *rps_head;
+    // point to the list tail;
+    list_t *rps_tail;
 };
 
+#define MAX_RESET_DOMAIN 16
 struct reset_attributes {
     uint16_t domain_nums;
 };
@@ -121,11 +127,12 @@ struct scmi_protocol_ops {
     int id;
     int (*req_process)(struct vhost_user_scmi *, struct scmi_msg_info *, struct virtio_scmi_request *,
         uint32_t, struct virtio_scmi_response *, uint32_t *);
+    void (*reset)(struct vhost_user_scmi *);
 };
 
 
-void parse_power_node(struct vhost_user_scmi *vscmi, char *args);
-void parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
-void parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_power_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
 #endif
 

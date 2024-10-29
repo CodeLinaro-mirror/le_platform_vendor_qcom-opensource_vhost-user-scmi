@@ -11,6 +11,7 @@
 #include "iface_scmi_dev.h"
 #include "log.h"
 #include "list.h"
+#include "power.h"
 
 #define POWER_TYPEID_MASK  ((1UL << 28) - 1)
 #define POWER_STATETYPE_SHFIT 30
@@ -20,6 +21,16 @@
                 | (0 & POWER_TYPEID_MASK))
 #define POWER_STATE_OFF (((1 & POWER_STATETYPE_MASK) << POWER_STATETYPE_SHFIT) \
                 | (0 & POWER_TYPEID_MASK))
+
+#define RESP(msg_id) response_##msg_id
+
+#define PRE_PROCESS(msg_id)  \
+       if (resp_struct_len < sizeof(struct power_resp_##msg_id)) { \
+            rsp->ret_values[0] = SCMI_RESP_STATUS_INV; \
+            goto buffer_not_enough; \
+       }   \
+       *rsp_len = sizeof(struct power_resp_##msg_id); \
+       struct power_resp_##msg_id *RESP(msg_id) = (struct power_resp_##msg_id *)rsp->ret_values;
 
 int power_operation_request(int fd, scmi_oper_ioctl_t *req, char *name, scmi_pwr_oper_t op)
 {
@@ -38,33 +49,38 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 {
     uint32_t domain_id;
     uint32_t power_stat;
-    uint32_t ret = 0;
     uint32_t channel_id;
     char name[MAX_DOMAIN_LENGTH];
     scmi_oper_ioctl_t request;
     scmi_pwr_oper_t pwr_oper;
     struct protocol_domain *proto_dm;
-    int fd;
-    uint32_t ret_len = 1;
+    int fd, ret;
     struct power_attributes *pa = &vscmi->pw_attr;
+    uint32_t resp_struct_len = *rsp_len - 4; // remove the return hdr length.
+
+    if (resp_struct_len < 4)
+        return -1;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = 0x20000;
 
+            PRE_PROCESS(00);
+            RESP(00)->status = SCMI_RESP_STATUS_OK;
+            RESP(00)->version = 0x20000;
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = vscmi->pw_attr.domain_nums; //get_power_domain_number();
-            rsp->ret_values[ret_len++] = 0;
-            rsp->ret_values[ret_len++] = 0;
-            rsp->ret_values[ret_len++] = 0; // no shared memory region.
+            PRE_PROCESS(01);
+            RESP(01)->status = SCMI_RESP_STATUS_OK;
+            RESP(01)->attributes= vscmi->pw_attr.domain_nums; //get_power_domain_number();
+            RESP(01)->statistics_address_low = 0;
+            RESP(01)->statistics_address_high = 0;
+            RESP(01)->statistics_len = 0; // no shared memory region.
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
+            PRE_PROCESS(02);
             switch (req->params[0]) {
                 case 0x0:
                 case 0x1:
@@ -72,48 +88,50 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
                 case 0x3:
                 case 0x4:
                 case 0x5:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+                     RESP(02)->status = SCMI_RESP_STATUS_OK;
                      break;
                 case 0x6:
                 case 0x7:
                 case 0x8:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+                     RESP(02)->status = SCMI_RESP_STATUS_NOT_FOUND;
                      break;
                 default:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                     RESP(02)->status = SCMI_RESP_STATUS_INV;
             }
-            rsp->ret_values[1] = 0;
+            RESP(02)->attributes = 0;
             break;
         case 0x3:
-            pr_debug("msg type is protocol domain attribute \n");
             domain_id = req->params[0];
+            pr_debug("msg type is protocol domain attribute, domain id %d \n", domain_id);
+
+            PRE_PROCESS(03);
             proto_dm = get_dev_pd(&vscmi->dev_res, 0x11, domain_id);
             if (!proto_dm) {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(03)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
             // currently, each domain has same attribute.
-            rsp->ret_values[ret_len++] = 0x1 << 29; //Power state synchronous support.
+            RESP(03)->attributes = 0x1 << 29; //Power state synchronous support.
 
             add_domainid_to_name(proto_dm->domain_name, domain_id, name);
-            int n = strlcpy(&rsp->ret_values[ret_len], name, MAX_DOMAIN_LENGTH);
-            ret_len += n / 4 + 1;
+            int n = strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
 
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            RESP(03)->status = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
             domain_id = req->params[1];
             pr_debug("msg type is power set for domain %d \n", domain_id);
+            PRE_PROCESS(04);
             proto_dm = get_dev_pd(&vscmi->dev_res, 0x11, domain_id);
             if (!proto_dm) {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
 
             fd = get_dev_fd(&vscmi->dev_res, hdr->protocol_id, domain_id);
             if (fd < 0) {
                 pr_debug("no such device, pleae check!\n");
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
             power_stat = req->params[2];
@@ -124,14 +142,14 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
                     pwr_oper = SCMI_PWR_OFF;
                 }
             } else {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
             ret = power_operation_request(fd, &request, (char *)proto_dm->domain_name, pwr_oper);
             if (ret < 0)
-                rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+                RESP(04)->status = SCMI_RESP_STATUS_NOT_FOUND;
             else {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+                RESP(04)->status = SCMI_RESP_STATUS_OK;
                 pa->rps_list[domain_id].data = power_stat;
                 if (pwr_oper == SCMI_PWR_ON) {
                     // only record power on domain in the list
@@ -148,26 +166,34 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
         case 0x5:
             domain_id = req->params[0];
             pr_debug("msg type is power get for domain %d \n", domain_id);
+            PRE_PROCESS(05);
             fd = get_dev_fd(&vscmi->dev_res, hdr->protocol_id, domain_id);
             if (fd < 0) {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(05)->status = SCMI_RESP_STATUS_INV;
                 pr_debug("no such device, pleae check!\n");
                 break;
             }
             // Currently no IOCTL for to get power state, so just return the record state.
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = pa->rps_list[domain_id].data;
+            RESP(05)->status = SCMI_RESP_STATUS_OK;
+            RESP(05)->power_state = pa->rps_list[domain_id].data;
             pr_debug("get power state = 0x%x \n", pa->rps_list[domain_id].data);
             break;
         default:
             pr_err("[Error] msg id %d is not support\n", hdr->msg_id);
             rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+            *rsp_len = 4;
             break;
     }
 
     rsp->hdr = req->hdr;
-    *rsp_len = ret_len * 4;
-    return ret;
+    return 0;
+
+buffer_not_enough:
+    pr_err("%s: response data len %d is not correct for message %d \n",
+                __func__, resp_struct_len, hdr->msg_id);
+    *rsp_len = 4;
+    rsp->hdr = req->hdr;
+    return 0;
 }
 
 int parse_power_node(struct vhost_user_scmi *vscmi, char *args)

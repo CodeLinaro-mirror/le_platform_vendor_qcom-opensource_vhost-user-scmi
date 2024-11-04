@@ -76,7 +76,7 @@ static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             break;
 
         case 0x6:
-            pr_debug("msg type is get protocol list, skip = %d \n", skip);
+            pr_debug("msg type is get protocol list \n");
             PRE_PROCESS(06);
 
             RESP(06)->status = SCMI_RESP_STATUS_INV;

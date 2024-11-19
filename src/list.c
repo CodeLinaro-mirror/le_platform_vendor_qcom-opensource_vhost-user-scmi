@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include "list.h"
+#include "log.h"
 
 void list_push(list_t **head, list_t **tail, list_t *entry)
 {

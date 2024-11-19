@@ -149,7 +149,7 @@ void kill_worker(void)
     void *jval;
 
     if (epoll_fd && pipefd[1]) {
-        write(pipefd[1], &buf, 1);
+        (void)write(pipefd[1], &buf, 1);
         pthread_join(recv_pid, &jval);
         close(pipefd[1]);
         close(epoll_fd);

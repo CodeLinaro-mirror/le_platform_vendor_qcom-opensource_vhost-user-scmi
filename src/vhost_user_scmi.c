@@ -99,14 +99,21 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
             pr_err("[Error] message is not correct!\n");
             return false;
         }
+        if ((iov[0].iov_len < sizeof(req->hdr)) || (iov[1].iov_len < sizeof(rsp->hdr))) {
+            pr_err("[Error] message length is not correct!\n");
+            return false;
+        }
+
         req = iov[0].iov_base;
         req_len = iov[0].iov_len - sizeof(req->hdr);
         rsp = iov[1].iov_base;
+        rsp_len = iov[1].iov_len;
 
         ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, &rsp_len);
         if (!ret) {
             if (rsp_len > (iov[1].iov_len - sizeof(rsp->hdr))) {
-                pr_err("[Error] response size is too large! \n");
+                pr_err("[Error] response size %d is larger than %d! \n",
+                    rsp_len, iov[1].iov_len - sizeof(rsp->hdr));
             } else {
                 vq_relchain(vq, idx, rsp_len + sizeof(rsp->hdr));
             }

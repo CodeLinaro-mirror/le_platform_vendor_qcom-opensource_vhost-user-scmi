@@ -9,6 +9,17 @@
 #include "access_control.h"
 #include "iface_scmi_dev.h"
 #include "log.h"
+#include "reset.h"
+
+#define RESP(msg_id) response_##msg_id
+
+#define PRE_PROCESS(msg_id)  \
+       if (resp_struct_len < sizeof(struct reset_resp_##msg_id)) { \
+            rsp->ret_values[0] = SCMI_RESP_STATUS_INV; \
+            goto buffer_not_enough; \
+       }   \
+       *rsp_len = sizeof(struct reset_resp_##msg_id); \
+       struct reset_resp_##msg_id *RESP(msg_id) = (struct reset_resp_##msg_id *)rsp->ret_values;
 
 int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *name, scmi_rst_oper_t op)
 {
@@ -27,103 +38,113 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 {
     uint32_t domain_id;
     uint32_t reset_flag, reset_state;
-    uint32_t ret = 0;
     char name[MAX_DOMAIN_LENGTH];
     uint32_t channel_id;
-    int fd;
+    int fd, ret;
     scmi_oper_ioctl_t request;
     struct protocol_domain *proto_dm;
-    uint32_t ret_len = 1;
+    uint32_t resp_struct_len = *rsp_len - 4; // remove the return hdr length.
+
+    if (resp_struct_len < 4)
+        return -1;
 
     switch (hdr->msg_id) {
         case 0x0:
             pr_debug("msg id is protocol version\n");
+            PRE_PROCESS(00);
 
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = 0x30000;
+            RESP(00)->status = SCMI_RESP_STATUS_OK;
+            RESP(00)->version = 0x30000;
 
             break;
         case 0x1:
             pr_debug("msg type is protocol attribute \n");
-
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
-            rsp->ret_values[ret_len++] = vscmi->rs_attr.domain_nums;
+            PRE_PROCESS(01);
+            RESP(01)->status = SCMI_RESP_STATUS_OK;
+            RESP(01)->attributes = vscmi->rs_attr.domain_nums;
             break;
         case 0x2:
             pr_debug("msg type is protocol msg attribute \n");
 
+            PRE_PROCESS(02);
             switch (req->params[0]) {
                 case 0x0:
                 case 0x1:
                 case 0x2:
                 case 0x3:
                 case 0x4:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+                     RESP(02)->status = SCMI_RESP_STATUS_OK;
                      break;
                 case 0x5:
                 case 0x6:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+                     RESP(02)->status = SCMI_RESP_STATUS_NOT_FOUND;
                      break;
                 default:
-                     rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                     RESP(02)->status = SCMI_RESP_STATUS_INV;
             }
-            rsp->ret_values[ret_len++] = 0;
+            RESP(02)->attributes = 0;
             break;
         case 0x3:
-            pr_debug("msg type is protocol domain attribute \n");
             domain_id = req->params[0];
-
+            pr_debug("msg type is protocol domain attribute, domain id %d \n", domain_id);
+            PRE_PROCESS(03);
             proto_dm = get_dev_pd(&vscmi->dev_res, 0x16, domain_id);
             if (!proto_dm) {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(03)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
 
             // currenlty, each domain_id has the same attribute.
 
-            rsp->ret_values[ret_len++] = 0x0;
-            rsp->ret_values[ret_len++] = 0xFFFFFFFF; //indicates this field is not supported by the platform
+            RESP(03)->attributes = 0x0;
+            RESP(03)->latency = 0xFFFFFFFF; //indicates this field is not supported by the platform
 
             add_domainid_to_name(proto_dm->domain_name, domain_id, name);
-            int n = strlcpy(&rsp->ret_values[ret_len], name, MAX_DOMAIN_LENGTH);
-            ret_len += n / 4 + 1;
+            int n = strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
  
-            rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+            RESP(03)->status = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:
-            pr_debug("msg type is reset \n");
-
             domain_id = req->params[0];
+            pr_debug("msg type is reset domain %d \n", domain_id);
 
+            PRE_PROCESS(04);
             proto_dm = get_dev_pd(&vscmi->dev_res, 0x16, domain_id);
             if (!proto_dm) {
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
             fd = get_dev_fd(&vscmi->dev_res, hdr->protocol_id, domain_id);
             if (fd < 0) {
                 pr_debug("could not find device \n");
-                rsp->ret_values[0] = SCMI_RESP_STATUS_INV;
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
                 break;
             }
             reset_flag = req->params[1];
             reset_state = req->params[2];
             ret = reset_operation_request(fd, &request,	(char *)proto_dm->domain_name, SCMI_RST_RESET);
             if (ret < 0)
-                rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+                RESP(04)->status = SCMI_RESP_STATUS_NOT_FOUND;
             else
-                rsp->ret_values[0] = SCMI_RESP_STATUS_OK;
+                RESP(04)->status = SCMI_RESP_STATUS_OK;
             break;
 
         default:
             pr_err("[Error] msg id %d is not support\n", hdr->msg_id);
             rsp->ret_values[0] = SCMI_RESP_STATUS_NOT_FOUND;
+            *rsp_len = 4;
             break;
     }
 
     rsp->hdr = req->hdr;
-    *rsp_len = ret_len * 4;
-    return ret;
+    return 0;
+
+buffer_not_enough:
+    pr_err("%s: response data len %d is not correct for message %d \n",
+                __func__, resp_struct_len, hdr->msg_id);
+    *rsp_len = 4;
+    rsp->hdr = req->hdr;
+    return 0;
 }
 
 int parse_reset_node(struct vhost_user_scmi *vscmi, char *args)

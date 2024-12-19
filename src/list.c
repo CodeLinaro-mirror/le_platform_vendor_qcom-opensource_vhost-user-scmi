@@ -44,6 +44,8 @@ bool list_remove(list_t **head, list_t **tail, void *addr)
                 if (n == NULL) {
                     // tail
                     *tail = NULL;
+                } else {
+                    n->prev = NULL;
                 }
             } else {
                 //n == NULL, in the tail
@@ -93,6 +95,7 @@ void list_print(list_t *head, list_t *tail)
 
     e = tail;
 
+    i = 0;
     pr_info("show list from tail to head:\n");
     while(e) {
         pr_info("list entry[%d] is found, data = %x\n", i++, e->data);

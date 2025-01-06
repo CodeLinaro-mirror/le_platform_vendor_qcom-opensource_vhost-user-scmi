@@ -11,7 +11,11 @@ Before = qcrosvm.service
 Type=simple
 ExecStart=/usr/bin/vhost-user-scmi \
 -l level=debug \
--s /tmp/pt-dev-skt
+-s /tmp/pt-dev-skt \
+-f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000 \
+-p 2 \
+-d /dev/scmi_uart2,19/0/perf,17/0/power \
+-d /dev/scmi_pcie0,17/1/power
 
 [Install]
 WantedBy = multi-user.target

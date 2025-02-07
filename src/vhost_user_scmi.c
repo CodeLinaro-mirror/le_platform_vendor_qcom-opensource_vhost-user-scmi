@@ -358,7 +358,7 @@ int main(int argc, char **argv)
     register_to_vmm_service();
 
 loop:
-    pr_debug("vhost user wait for connect..\n");
+    pr_debug("vhost user wait for connect ..\n");
     if (vhost_user_wait_for_connect(&vscmi->dev, vscmi->sock_path) < 0) {
         pr_err("[Error] failed to make connection with client\n");
         ret = -1;

@@ -150,14 +150,23 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
                 RESP(04)->status = SCMI_RESP_STATUS_NOT_FOUND;
             else {
                 RESP(04)->status = SCMI_RESP_STATUS_OK;
-                pa->rps_list[domain_id].data = power_stat;
-                if (pwr_oper == SCMI_PWR_ON) {
-                    // only record power on domain in the list
-                    list_push(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
-                    pr_debug("[power] record poweron domain%d to list\n", domain_id);
+                if (pwr_oper == SCMI_PWR_ON)  {
+                    if (pa->rps_list[domain_id].data != POWER_STATE_ON) {
+                        pa->rps_list[domain_id].data = POWER_STATE_ON;
+                        // only record power on domain in the list
+                        list_push(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                        pr_debug("[power] record poweron domain%d to list\n", domain_id);
+                    } else {
+                        pr_debug("[power] domain%d is already in poweron statue, adjust the node position \n", domain_id);
+                        ret = list_remove(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                        pr_debug("[power] remove poweron domain%d from list, ret=%d\n", domain_id, ret);
+                        list_push(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                        pr_debug("[power] record poweron domain%d to list\n", domain_id);
+                    }
                 } else {
                     // if the power is off, remove the domain from list
                     ret = list_remove(&pa->rps_head, &pa->rps_tail, &pa->rps_list[domain_id]);
+                    pa->rps_list[domain_id].data = POWER_STATE_OFF;
                     pr_debug("[power] remove poweron domain%d from list, ret=%d\n", domain_id, ret);
                 }
                 //list_print(pa->rps_head, pa->rps_tail);
@@ -234,7 +243,7 @@ static void scmi_power_reset(struct vhost_user_scmi *vscmi)
     pr_debug("start power reset..\n");
 
     //list_print(pa->rps_head, pa->rps_tail);
-    do {
+    while (pa->rps_head) {
         domain_poweron = list_pop(&pa->rps_head, &pa->rps_tail);
         if (!domain_poweron)
             break;
@@ -255,7 +264,7 @@ static void scmi_power_reset(struct vhost_user_scmi *vscmi)
                 pr_debug("[reset]: power off domain %d\n", domain_id);
             }
         }
-    } while (pa->rps_head);
+    }
 
 }
 

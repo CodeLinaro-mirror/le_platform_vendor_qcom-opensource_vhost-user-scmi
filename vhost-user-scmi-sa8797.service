@@ -19,6 +19,7 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_usb2_phy2,17/2/usb_transfer,17/3/usb_core \
 -d /dev/scmi_uart17,19/0/perf,17/4/power \
 -d /dev/scmi_bluetooth,17/5/power_regulator,17/6/power_gpio \
+-d /dev/scmi_pcie2,17/7/power \
 -d /dev/scmi_emac1,17/8/emac_power,17/9/emac_clock,19/1/emac_perf,19/2/perf_5g_serdes,22/0/emac_reset
 
 [Install]

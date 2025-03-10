@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <vhost_user.h>
+#include <errno.h>
 #include "worker.h"
 #include "log.h"
 
@@ -39,8 +40,12 @@ static void *worker_thr(void *arg)
         pr_debug("start to epoll wait...   \n");
         ret = epoll_wait(epoll_fd, eventlist, 20, -1);
         if (ret < 0) {
-            pr_err("epoll error!\n");
-            break;
+            if (errno == EINTR) {
+                continue;
+            } else {
+                pr_err("epoll_wait ret=%d err=%s(%d)\n", ret, strerror(errno), errno);
+                break;
+            }
         }
         pthread_mutex_lock(&fdmutex);
         for (i = 0; i < ret; i++) {

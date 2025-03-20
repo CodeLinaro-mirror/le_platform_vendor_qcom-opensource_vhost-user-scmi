@@ -80,8 +80,8 @@ int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
     }
     fd = open(dev_path, O_RDWR | O_EXCL);
     if (fd <=0) {
-        pr_err("[Error] failed to open %s\n", dev_path);
-        return -1;
+        pr_err("[Error] failed to open %s, skip this device!! \n", dev_path);
+        return 0;
     }
 
     dm = &dr->dev_map[dr->device_nums++];

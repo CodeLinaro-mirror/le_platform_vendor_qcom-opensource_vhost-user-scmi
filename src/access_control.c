@@ -62,7 +62,7 @@ int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
     struct protocol_domain *pd;
     char *name;
     int fd;
-    char dev_path[20]={'\0'};
+    char dev_path[128]={'\0'};
 
     char *sr, *sn, *st, *stt;
 
@@ -70,7 +70,7 @@ int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
     name = strsep(&sn, ",");
     if (!name || !sn)
         return 0;
-    snprintf(dev_path, 20, "%s", name);
+    snprintf(dev_path, 128, "%s", name);
 
     pr_debug("find device : %s\n", dev_path);
 

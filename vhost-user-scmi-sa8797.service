@@ -1,14 +1,16 @@
 # Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 [Unit]
-Description=Service to start the vhost-user-scmi
+Description=Service for vhost-user-scmi
 
 After= remote-fs.target
 
 Before = qcrosvm.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+
 ExecStart=/usr/bin/vhost-user-scmi \
 -l level=debug \
 -s /tmp/pt-dev-skt \

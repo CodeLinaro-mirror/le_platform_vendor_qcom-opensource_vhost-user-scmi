@@ -45,20 +45,20 @@ struct virtio_scmi_response {
 struct perf_domain {
     uint16_t domain_id;
     uint16_t level_nums;
-#define MAX_PERF_LEVEL  16
+#define MAX_PERF_LEVEL  64
     uint32_t level[MAX_PERF_LEVEL];
     uint32_t left_levels;
 };
 
 struct perf_attributes {
     uint16_t domain_nums;
-#define MAX_PERF_DOMAIN 32
+#define MAX_PERF_DOMAIN 64
     struct perf_domain pds[MAX_PERF_DOMAIN];
 };
 
 struct power_attributes {
     uint16_t domain_nums;
-#define MAX_POWER_DOMAIN 16
+#define MAX_POWER_DOMAIN 64
     // record power status
     list_t rps_list[MAX_POWER_DOMAIN];
     // point to the list head;
@@ -67,7 +67,7 @@ struct power_attributes {
     list_t *rps_tail;
 };
 
-#define MAX_RESET_DOMAIN 16
+#define MAX_RESET_DOMAIN 64
 struct reset_attributes {
     uint16_t domain_nums;
 };
@@ -81,13 +81,13 @@ struct protocol_domain {
 struct device_map {
     int      dev_fd;
     uint16_t    pd_nums;
-#define MAX_PROTOCOL_NUM 16
+#define MAX_PROTOCOL_NUM 64
     struct protocol_domain prot_doms[MAX_PROTOCOL_NUM];
 };
 
 struct device_resource {
     uint16_t device_nums;
-#define MAX_DEVICE_NUM  16
+#define MAX_DEVICE_NUM  64
     struct device_map dev_map[MAX_DEVICE_NUM];
 };
 

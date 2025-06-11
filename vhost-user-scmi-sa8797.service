@@ -12,8 +12,8 @@ Type=simple
 ExecStart=/usr/bin/vhost-user-scmi \
 -l level=debug \
 -s /tmp/pt-dev-skt \
--f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,1/10:100:1000:2500:5000:10000,2/10:100:1000:2500:5000 \
--p 12 \
+-f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,1/10:100:1000:2500:5000:10000,2/10:100:1000:2500:5000,3/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000 \
+-p 19 \
 -r 1 \
 -d /dev/scmi_usb2,17/0/usb_transfer,17/1/usb_core \
 -d /dev/scmi_usb2_phy2,17/2/usb_transfer,17/3/usb_core \
@@ -21,7 +21,11 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_bluetooth,17/5/power_regulator,17/6/power_gpio \
 -d /dev/scmi_pcie2,17/7/power \
 -d /dev/scmi_emac1,17/8/emac_power,17/9/emac_clock,19/1/emac_perf,19/2/perf_5g_serdes,22/0/emac_reset \
--d /dev/scmi_wlan,17/10/power_regulator,17/11/power_gpio
+-d /dev/scmi_wlan,17/10/power_regulator,17/11/power_gpio \
+-d /dev/scmi_uart14,17/12/power,19/3/perf \
+-d /dev/scmi_usb1,17/13/usb_transfer,17/14/usb_core \
+-d /dev/scmi_usb1_phy2,17/15/usb_transfer,17/16/usb_core \
+-d /dev/scmi_usb1_qmp,17/17/usb_transfer,17/18/usb_core
 
 [Install]
 WantedBy = multi-user.target

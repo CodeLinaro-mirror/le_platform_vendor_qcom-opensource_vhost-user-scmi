@@ -4,6 +4,17 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
 */
 #include <stdio.h>
 #include <type.h>
+#define RESET_FLAGS_Autonomous_Reset_Mask 0x01U
+#define RESET_FLAGS_Autonomous_Reset_Shift 0U
+#define RESET_FLAGS_Explicit_Signal_Mask 0x02U
+#define RESET_FLAGS_Explicit_Signal_Shift 1U
+#define RESET_FLAGS_Async_Flag_Mask 0x4U
+#define RESET_FLAGS_Async_Flag_Shift 2U
+#define RESET_FLAGS_Reserved_Mask 0xFFFFFFF8U
+#define RESET_FLAGS_Reserved_Shift 3U
+
+#define RESET_STATUS_Reset_Type_Mask 0x80000000U
+#define RESET_STATUS_Reset_ID_Mask 0x7FFFFFFFU
 
 struct reset_resp_00 {
     int32_t status;

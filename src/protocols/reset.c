@@ -38,6 +38,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
 {
     uint32_t domain_id;
     uint32_t reset_flag, reset_state;
+    scmi_rst_oper_t reset_type;
     char name[MAX_DOMAIN_LENGTH];
     uint32_t channel_id;
     int fd, ret;
@@ -122,7 +123,32 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             }
             reset_flag = req->params[1];
             reset_state = req->params[2];
-            ret = reset_operation_request(fd, &request,	(char *)proto_dm->domain_name, SCMI_RST_RESET);
+            pr_debug("reset flags = 0x%x \n", reset_flag);
+            pr_debug("reset state = 0x%x \n", reset_state);
+
+            if (reset_flag & RESET_FLAGS_Reserved_Mask) {
+                pr_err("Invalid Reset Flag: 0x%x \n", reset_flag);
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
+                break;
+            }
+            // only reset type = 0 and reset_id = 0 are supported
+            if ((reset_state & RESET_STATUS_Reset_Type_Mask) || (reset_state & RESET_STATUS_Reset_ID_Mask)) {
+                pr_err("Invalid Reset Type\n");
+                RESP(04)->status = SCMI_RESP_STATUS_INV;
+            }
+
+            if ((reset_flag & RESET_FLAGS_Autonomous_Reset_Mask) >> RESET_FLAGS_Autonomous_Reset_Shift)
+            {
+                reset_type = SCMI_RST_RESET;
+                if (reset_flag & RESET_FLAGS_Async_Flag_Mask) {
+                    pr_err("Not support async reset!!, will fallback to sync reset\n");
+                }
+            } else if ((reset_flag & RESET_FLAGS_Explicit_Signal_Mask) >> RESET_FLAGS_Explicit_Signal_Shift) {
+                reset_type = SCMI_RST_ASSERT;
+            } else {
+                reset_type = SCMI_RST_DEASSERT;
+            }
+            ret = reset_operation_request(fd, &request,	(char *)proto_dm->domain_name, reset_type);
             if (ret < 0)
                 RESP(04)->status = SCMI_RESP_STATUS_NOT_FOUND;
             else

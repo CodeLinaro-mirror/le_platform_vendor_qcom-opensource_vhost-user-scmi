@@ -236,10 +236,16 @@ static void scmi_power_reset(struct vhost_user_scmi *vscmi)
     scmi_oper_ioctl_t request;
     uint16_t domain_id;
     int fd, ret;
-    struct power_attributes *pa = &vscmi->pw_attr;
+    struct power_attributes *pa;
     struct protocol_domain *proto_dm;
     list_t *domain_poweron;
 
+    if (!vscmi) {
+        pr_err("[Error] NULL vscmi pointer in scmi_power_reset\n");
+        return;
+    }
+
+    pa = &vscmi->pw_attr;
     pr_debug("start power reset..\n");
 
     //list_print(pa->rps_head, pa->rps_tail);
@@ -265,7 +271,6 @@ static void scmi_power_reset(struct vhost_user_scmi *vscmi)
             }
         }
     }
-
 }
 
 struct scmi_protocol_ops power_ops = {

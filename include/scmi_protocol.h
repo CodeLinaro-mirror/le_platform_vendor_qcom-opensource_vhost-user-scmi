@@ -104,6 +104,14 @@ struct vhost_user_scmi {
     char sock_path[512];
     uint64_t features;
     uint64_t protocol_features;
+    /* Mutex for protecting virtqueue access */
+    pthread_mutex_t vq_mutex;
+    /* Flag to indicate if a virtqueue is being processed */
+    int vq_in_use;
+    /* Flag to indicate if a virtqueue is being deleted */
+    int vq_marked_for_deletion;
+    /* Condition variable for signaling when virtqueue is no longer in use */
+    pthread_cond_t vq_cond;
 };
 
 struct scmi_msg_info {
@@ -135,4 +143,3 @@ int parse_power_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
 #endif
-

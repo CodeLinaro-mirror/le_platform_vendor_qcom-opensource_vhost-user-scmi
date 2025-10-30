@@ -56,6 +56,16 @@ static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_sc
     struct scmi_protocol_ops *ops;
     int ret = 0;
 
+    if (!vscmi || !req || !rsp || !rsp_len) {
+        pr_err("[Error] NULL pointer in scmi_msg_process_sync\n");
+        return -1;
+    }
+
+    if (req_len < 0) {
+        pr_err("[Error] Invalid request length %d in scmi_msg_process_sync\n", req_len);
+        return -1;
+    }
+
     hdr.protocol_id = SCMI_GET_PROT_ID(req->hdr);
     hdr.msg_id = SCMI_GET_MSG_ID(req->hdr);
     pr_debug("%s: req hdr =%x protocol_id = %x msg_id = %x\n",
@@ -81,13 +91,17 @@ static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi, struct virtio_sc
 
 static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_virtqueue *vq)
 {
-
     struct virtio_scmi_request *req;
     struct virtio_scmi_response *rsp;
     unsigned int req_len, rsp_len;
     int idx;
     int ret;
     struct iovec iov[2];
+
+    if (!vscmi || !vq) {
+        pr_err("[Error] NULL pointer in scmi_virtio_process_req\n");
+        return false;
+    }
 
 #ifdef __TEST__
     pr_info("%s: Do not access the vq in test case \n", __func__);
@@ -105,8 +119,18 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
         }
 
         req = iov[0].iov_base;
+        if (!req) {
+            pr_err("[Error] NULL request pointer\n");
+            return false;
+        }
+
         req_len = iov[0].iov_len - sizeof(req->hdr);
         rsp = iov[1].iov_base;
+        if (!rsp) {
+            pr_err("[Error] NULL response pointer\n");
+            return false;
+        }
+
         rsp_len = iov[1].iov_len;
 
         ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, &rsp_len);
@@ -129,14 +153,28 @@ static bool scmi_virtio_process_req(struct vhost_user_scmi *vscmi, struct vhost_
 
 static void scmi_process_vq(void *data)
 {
-    struct vhost_virtqueue *vq = data;
-    struct vhost_user_dev *dev = vq->vudev;
+    struct vhost_virtqueue *vq;
+    struct vhost_user_dev *dev;
     struct vhost_user_scmi *vscmi;
     int ret;
 
+    if (!data) {
+        pr_err("[Error] NULL data pointer in scmi_process_vq\n");
+        return;
+    }
+
+    vq = (struct vhost_virtqueue *)data;
+    if (!vq->vudev) {
+        pr_err("[Error] NULL vudev pointer in scmi_process_vq\n");
+        return;
+    }
+
+    dev = vq->vudev;
     vscmi = container_of(dev, struct vhost_user_scmi, dev);
-    assert(vscmi);
-    assert(vq);
+    if (!vscmi) {
+        pr_err("[Error] NULL vscmi pointer in scmi_process_vq\n");
+        return;
+    }
 
     pr_debug("start to process vq\n");
     while (1) {
@@ -157,16 +195,38 @@ static void scmi_device_reset(struct vhost_user_scmi *vscmi)
 
     SET_FOREACH(opspp, scmi_protolol_set) {
         opsp = *opspp;
-        if (opsp->reset)
+        if (opsp && opsp->reset)
             opsp->reset(vscmi);
     }
 }
 
 static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32_t state)
 {
-    struct vhost_virtqueue *vq = dev->virtqueue[idx];
-    struct vhost_user_scmi *vscmi = container_of(dev, struct vhost_user_scmi, dev);
+    struct vhost_virtqueue *vq;
+    struct vhost_user_scmi *vscmi;
     int ret = 0;
+
+    if (!dev) {
+        pr_err("[Error] NULL dev pointer in scmi_set_vring_state\n");
+        return -1;
+    }
+
+    if (idx >= VHOST_MAX_VRING) {
+        pr_err("[Error] Invalid virtqueue index %d in scmi_set_vring_state\n", idx);
+        return -1;
+    }
+
+    vq = dev->virtqueue[idx];
+    if (!vq) {
+        pr_err("[Error] NULL virtqueue pointer for index %d in scmi_set_vring_state\n", idx);
+        return -1;
+    }
+
+    vscmi = container_of(dev, struct vhost_user_scmi, dev);
+    if (!vscmi) {
+        pr_err("[Error] NULL vscmi pointer in scmi_set_vring_state\n");
+        return -1;
+    }
 
     pr_debug("set vring state to %s \n", state ? "enable" : "disable");
     if (state) {
@@ -391,4 +451,3 @@ err:
     }
     return ret;
 }
-

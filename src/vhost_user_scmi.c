@@ -176,6 +176,20 @@ static void scmi_process_vq(void *data)
         return;
     }
 
+    /* Acquire the mutex and mark the virtqueue as in use */
+    pthread_mutex_lock(&vscmi->vq_mutex);
+
+    /* Check if the virtqueue is marked for deletion */
+    if (vscmi->vq_marked_for_deletion) {
+        pthread_mutex_unlock(&vscmi->vq_mutex);
+        pr_debug("virtqueue is marked for deletion, skipping processing\n");
+        return;
+    }
+
+    /* Mark the virtqueue as in use */
+    vscmi->vq_in_use++;
+    pthread_mutex_unlock(&vscmi->vq_mutex);
+
     pr_debug("start to process vq\n");
     while (1) {
         ret = scmi_virtio_process_req(vscmi, vq);
@@ -184,6 +198,16 @@ static void scmi_process_vq(void *data)
         }
     }
     pr_debug("finish process\n");
+
+    /* Release the virtqueue */
+    pthread_mutex_lock(&vscmi->vq_mutex);
+    vscmi->vq_in_use--;
+
+    /* Signal that we're done with the virtqueue */
+    if (vscmi->vq_in_use == 0 && vscmi->vq_marked_for_deletion) {
+        pthread_cond_signal(&vscmi->vq_cond);
+    }
+    pthread_mutex_unlock(&vscmi->vq_mutex);
 }
 
 static void scmi_device_reset(struct vhost_user_scmi *vscmi)
@@ -403,6 +427,12 @@ int main(int argc, char **argv)
         pr_err("[Error] failed to alloc vscmi structure!\n");
         return -1;
     }
+
+    /* Initialize synchronization variables */
+    pthread_mutex_init(&vscmi->vq_mutex, NULL);
+    pthread_cond_init(&vscmi->vq_cond, NULL);
+    vscmi->vq_in_use = 0;
+    vscmi->vq_marked_for_deletion = 0;
     if (parse_args(vscmi, argc, argv) < 0)
         goto err;
 
@@ -434,7 +464,23 @@ loop:
     vhost_user_start_loop(&vscmi->dev);
     pr_debug("vhost user loop exit\n");
 
+    /* Mark virtqueue for deletion and wait for any ongoing processing to complete */
+    pthread_mutex_lock(&vscmi->vq_mutex);
+    vscmi->vq_marked_for_deletion = 1;
+
+    /* Wait for any ongoing virtqueue processing to complete */
+    while (vscmi->vq_in_use > 0) {
+        pr_debug("waiting for virtqueue processing to complete, in_use=%d\n", vscmi->vq_in_use);
+        pthread_cond_wait(&vscmi->vq_cond, &vscmi->vq_mutex);
+    }
+    pthread_mutex_unlock(&vscmi->vq_mutex);
+
     vhost_user_deinit_device(&vscmi->dev);
+
+    /* Reset the deletion flag for next connection */
+    pthread_mutex_lock(&vscmi->vq_mutex);
+    vscmi->vq_marked_for_deletion = 0;
+    pthread_mutex_unlock(&vscmi->vq_mutex);
 
     if (is_daemon)
         goto loop;
@@ -446,6 +492,9 @@ err:
     access_exit(vscmi);
     // or do other operations which is needed when the thread is out.
     if (vscmi) {
+        /* Clean up synchronization resources */
+        pthread_mutex_destroy(&vscmi->vq_mutex);
+        pthread_cond_destroy(&vscmi->vq_cond);
         free(vscmi);
         vscmi = NULL;
     }

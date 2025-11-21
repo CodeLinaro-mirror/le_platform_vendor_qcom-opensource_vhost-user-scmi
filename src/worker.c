@@ -59,11 +59,11 @@ static void *worker_thr(void *arg)
                 exit = 1;
             } else {
                 do {
-					len = read(fd, buf, sizeof(buf));
-				} while (len == 20);
-                if (fi && fi->cb) {
+                    len = read(fd, buf, sizeof(buf));
+                } while (len == 20);
+                if (fi && fi->cb && fi->data) {  // Check if fi->data is not NULL
                     pr_debug("handle virtio request fd = %d\n", fi->fd);
-                   (fi->cb)(fi->data);
+                    (fi->cb)(fi->data);
                 }
             }
         }

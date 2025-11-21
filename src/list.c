@@ -10,7 +10,7 @@
 #include "list.h"
 #include "log.h"
 
-pthread_mutex_t list_mutex;
+pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void list_push(list_t **head, list_t **tail, list_t *entry)
 {

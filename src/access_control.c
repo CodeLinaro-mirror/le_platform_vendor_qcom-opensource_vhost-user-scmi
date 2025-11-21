@@ -188,10 +188,16 @@ void add_to_protocol_list(struct vhost_user_scmi *vscmi, int protocol)
 
 void access_exit(struct vhost_user_scmi *vscmi)
 {
-    struct device_resource *dr = &vscmi->dev_res;
+    struct device_resource *dr;
     struct device_map *dm;
     int i;
 
+    if (!vscmi) {
+        pr_err("[Error] NULL vscmi pointer in access_exit\n");
+        return;
+    }
+
+    dr = &vscmi->dev_res;
     for (i = 0; i < dr->device_nums; i++) {
         dm = &dr->dev_map[i];
         if (dm->dev_fd) {

@@ -37,7 +37,7 @@ int power_operation_request(int fd, scmi_oper_ioctl_t *req, char *name, scmi_pwr
     memset(req, 0, sizeof(*req));
     req->proto = SCMI_PROTO_POWER;
     req->oper = op;
-    strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
+    safe_strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
 
     pr_debug("set power: name=%s op=[%d] \n", name, op);
     return ioctl(fd, SCMI_IOCTL_PWR, req);
@@ -114,7 +114,7 @@ static int scmi_power_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             RESP(03)->attributes = 0x1 << 29; //Power state synchronous support.
 
             add_domainid_to_name(proto_dm->domain_name, domain_id, name);
-            int n = strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
+            int n = safe_strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
 
             RESP(03)->status = SCMI_RESP_STATUS_OK;
             break;

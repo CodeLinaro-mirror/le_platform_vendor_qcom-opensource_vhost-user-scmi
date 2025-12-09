@@ -33,8 +33,8 @@ void add_domainid_to_name(char *org, uint32_t domain_id, char *new)
     pr_debug("domain_name return to agent is %s \n", new);
 }
 
-//define strlcpy to avoid the banned strncpy
-size_t strlcpy(char *dst, const char *src, size_t size)
+//define safe_strlcpy to avoid the banned strncpy
+size_t safe_strlcpy(char *dst, const char *src, size_t size)
 {
     int copyed = 0;
     int i;

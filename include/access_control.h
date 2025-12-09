@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "scmi_protocol.h"
 
@@ -14,7 +15,7 @@
 #define MAX_VM_NUM 10
 
 void add_domainid_to_name(char *org, uint32_t domain_id, char *new);
-size_t strlcpy(char *dst, const char *src, size_t size);
+size_t safe_strlcpy(char *dst, const char *src, size_t size);
 bool access_is_ok_for_domain(struct device_resource *dev_res, int protocol, int domain_id);
 bool access_is_ok_for_protocol(struct vhost_user_scmi *vscmi, int protocol);
 void add_to_protocol_list(struct vhost_user_scmi *vscmi, int protocol);

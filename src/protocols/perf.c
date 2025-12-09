@@ -31,7 +31,7 @@ int perf_operation_request(int fd, scmi_oper_ioctl_t *req, char *name, int level
     req->proto = SCMI_PROTO_PERFORMANCE;
     req->oper = op;
     req->level = level;
-    strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
+    safe_strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
 
     pr_debug("set perf level: name=%s op=[%d] level=[%d] \n", req->name, op, level);
     return ioctl(fd, SCMI_IOCTL_PRF, req);
@@ -154,7 +154,7 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             RESP(03)->sustained_perf_level = sus_level;
 
             add_domainid_to_name(proto_dm->domain_name, domainid, name);
-            int n = strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
+            int n = safe_strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
             RESP(03)->status = SCMI_RESP_STATUS_OK;
             break;
         case 0x4:

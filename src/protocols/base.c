@@ -72,7 +72,7 @@ static int scmi_base_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             pr_debug("msg type is discover vendor \n");
             PRE_PROCESS(03);
             RESP(03)->status = SCMI_RESP_STATUS_OK;
-            strlcpy(RESP(03)->vendor_identifier, "QualComm", sizeof("QualComm"));
+            safe_strlcpy(RESP(03)->vendor_identifier, "QualComm", sizeof("QualComm"));
             break;
 
         case 0x6:

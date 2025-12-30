@@ -26,7 +26,7 @@ int reset_operation_request(int fd, scmi_oper_ioctl_t *req, const char *name, sc
     memset(req, 0, sizeof(*req));
     req->proto = SCMI_PROTO_RESET;
     req->oper = op;
-    strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
+    safe_strlcpy(req->name, name, MAX_DOMAIN_LENGTH);
 
     pr_debug("set reset: name=%s op=[%d]\n", req->name, op);
     return ioctl(fd, SCMI_IOCTL_RST, req);
@@ -101,7 +101,7 @@ static int scmi_reset_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg
             RESP(03)->latency = 0xFFFFFFFF; //indicates this field is not supported by the platform
 
             add_domainid_to_name(proto_dm->domain_name, domain_id, name);
-            int n = strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
+            int n = safe_strlcpy(RESP(03)->name, name, MAX_DOMAIN_LENGTH);
  
             RESP(03)->status = SCMI_RESP_STATUS_OK;
             break;

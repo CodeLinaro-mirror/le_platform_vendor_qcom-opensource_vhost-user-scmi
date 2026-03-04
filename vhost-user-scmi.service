@@ -17,7 +17,7 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -l level=debug \
 -s /tmp/pt-dev-skt \
 -f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,1/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000\
--p 11 \
+-p 12 \
 -d /dev/scmi_uart17,19/0/perf,17/0/power \
 -d /dev/scmi_pcie0,17/1/power \
 -d /dev/scmi_wlan,17/2/power_regulator,17/3/power_gpio \
@@ -25,7 +25,8 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_usb2_phy2,17/6/usb_transfer,17/7/usb_core \
 -d /dev/scmi_bluetooth,17/8/power \
 -d /dev/scmi_emac1,17/9/gvm_power_mdio \
--d /dev/scmi_uart3,19/1/perf,17/10/power
+-d /dev/scmi_uart3,19/1/perf,17/10/power \
+-d /dev/scmi_bluetooth_2,17/11/power
 
 [Install]
 WantedBy = multi-user.target

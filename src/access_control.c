@@ -55,7 +55,7 @@ size_t safe_strlcpy(char *dst, const char *src, size_t size)
     return copyed;
 }
 
-int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
+int parse_device_node(struct vhost_user_scmi *vscmi, char *args, dm_dev_type_t dev_type)
 {
     struct device_resource *dr = &vscmi->dev_res;
     struct device_map *dm;
@@ -78,14 +78,16 @@ int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
         pr_err("[Error] too many devices, max device number is %d!!\n", MAX_DEVICE_NUM);
         return -1;
     }
-    fd = open(dev_path, O_RDWR | O_EXCL);
+    fd = open(dev_path, O_RDWR);
     if (fd <=0) {
         pr_err("[Error] failed to open %s, skip this device!! \n", dev_path);
         return 0;
     }
+    pr_debug("open file %s fd = %d\n", dev_path, fd);
 
     dm = &dr->dev_map[dr->device_nums++];
     dm->dev_fd = fd;
+    dm->dev_type = dev_type;
     while(st = strsep(&sn, ",")) {
         stt = strsep(&st, "/");
         if (!st | !stt) break;
@@ -100,6 +102,18 @@ int parse_device_node(struct vhost_user_scmi *vscmi, char *args)
         if (!st | !stt) break;
 
         pd->domain_id = atoi(stt);
+
+        // only cpufreq device node support dynamic level get.
+        if (dev_type == DEV_CPUFREQ) {
+            if (pd->protocol_id != 0x13) {
+                pr_err("[Error] only support perf protocal fro CPUFREQ device\n");
+                return -1;
+            }
+            if (update_dynamic_perf_domain(vscmi, dm->dev_type, pd->domain_id, dm->dev_fd) < 0) {
+                pr_err("[Error] failed to update the perf levels for domain %d\n", pd->domain_id);
+                return -1;
+            }
+        }
 
         if (strlen(st) > MAX_DOMAIN_LENGTH - 1) {
             pr_err("[Error] %s: IOCTL will fail as the name of domain is truncated, max name length is %d !!\n",
@@ -135,6 +149,27 @@ int get_dev_fd(struct device_resource *dev_res, int protocol, int domain_id)
     }
     return -1;
 
+}
+
+int get_dev_type(struct device_resource *dev_res, int protocol, int domain_id)
+{
+    int i,j;
+    struct device_map *dm;
+    struct protocol_domain *pd;
+
+    if (!dev_res)
+        return -1;
+
+    for (i = 0;i < dev_res->device_nums; i++) {
+        dm = &dev_res->dev_map[i];
+        for (j = 0; j < dm->pd_nums; j++) {
+            pd = &dm->prot_doms[j];
+            if ((protocol == pd->protocol_id) && (domain_id == pd->domain_id)) {
+                return dm->dev_type;
+            }
+        }
+    }
+    return -1;
 }
 
 struct protocol_domain *get_dev_pd(struct device_resource *dev_res, int protocol, int domain_id)

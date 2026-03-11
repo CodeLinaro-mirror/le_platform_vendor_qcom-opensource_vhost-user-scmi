@@ -19,8 +19,9 @@ size_t safe_strlcpy(char *dst, const char *src, size_t size);
 bool access_is_ok_for_domain(struct device_resource *dev_res, int protocol, int domain_id);
 bool access_is_ok_for_protocol(struct vhost_user_scmi *vscmi, int protocol);
 void add_to_protocol_list(struct vhost_user_scmi *vscmi, int protocol);
-int parse_device_node(struct vhost_user_scmi *vscmi, char *args);
+int parse_device_node(struct vhost_user_scmi *vscmi, char *args, dm_dev_type_t dev_type);
 int get_dev_fd(struct device_resource *dev_res, int protocol, int domian_id);
+int get_dev_type(struct device_resource *dev_res, int protocol, int domain_id);
 struct protocol_domain *get_dev_pd(struct device_resource *dev_res, int protocol, int domian_id);
 void access_exit(struct vhost_user_scmi *vscmi);
 

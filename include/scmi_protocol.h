@@ -47,6 +47,7 @@ struct perf_domain {
     uint16_t level_nums;
 #define MAX_PERF_LEVEL  64
     uint32_t level[MAX_PERF_LEVEL];
+    uint32_t level_index[MAX_PERF_LEVEL]; /* only valid for DEV_CPUFREQ (level indexing mode) */
     uint32_t left_levels;
 };
 
@@ -77,12 +78,19 @@ struct protocol_domain {
     uint16_t domain_id;
     char domain_name[MAX_DOMAIN_LENGTH];
 };
+
+typedef enum {
+    DEV_USCMI = 0,
+    DEV_CPUFREQ,
+}dm_dev_type_t;
+
 // domian id + protocol id -> dev_fd
 struct device_map {
     int      dev_fd;
     uint16_t    pd_nums;
 #define MAX_PROTOCOL_NUM 64
     struct protocol_domain prot_doms[MAX_PROTOCOL_NUM];
+    dm_dev_type_t   dev_type;
 };
 
 struct device_resource {
@@ -142,4 +150,6 @@ struct scmi_protocol_ops {
 int parse_power_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
+int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_type, uint32_t domain_id, int fd);
+
 #endif

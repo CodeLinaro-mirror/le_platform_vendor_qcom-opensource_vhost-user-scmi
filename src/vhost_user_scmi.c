@@ -3,6 +3,8 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <getopt.h>
 #include <vu_atomic.h>
@@ -20,6 +22,234 @@
 
 static int is_daemon = 1;
 SET_DECLARE(scmi_protolol_set, struct scmi_protocol_ops);
+
+/* -----------------------------------------------------------------------
+ * Test command support (-t / --test)
+ *
+ * Format:  <protocol_id>/<msg_id>[/param0:param1:param2...]
+ *
+ * protocol_id and msg_id may be decimal or hex (0x prefix).
+ * params are colon-separated decimal or hex values.
+ *
+ * Examples:
+ *   -t 0x13/0x4/4:0        perf: get level-list for domain 4, starting at index 0
+ *   -t 0x13/0x7/4:1000000  perf: set level of domain 4 to 1000000
+ *   -t 0x13/0x8/4          perf: get current level of domain 4
+ *   -t 0x11/0x4/0:0:0      power: set domain 0 state
+ *   -t 0x16/0x4/0:1:0      reset: reset domain 0
+ * ----------------------------------------------------------------------- */
+
+#define MAX_TEST_PARAMS     16
+#define MAX_TEST_CMDS       16
+#define TEST_RSP_BUF_SIZE   512
+
+struct test_cmd {
+    uint8_t  protocol_id;
+    uint8_t  msg_id;
+    uint32_t params[MAX_TEST_PARAMS];
+    int      num_params;
+};
+
+static struct test_cmd g_test_cmds[MAX_TEST_CMDS];
+static int             g_num_test_cmds = 0;
+
+/* -----------------------------------------------------------------------
+ * Forward declaration (defined later in this file as static)
+ * ----------------------------------------------------------------------- */
+static int scmi_msg_process_sync(struct vhost_user_scmi *vscmi,
+                                 struct virtio_scmi_request *req, int req_len,
+                                 struct virtio_scmi_response *rsp, uint32_t *rsp_len);
+
+/* -----------------------------------------------------------------------
+ * parse_test_cmd – parse one -t argument and append to g_test_cmds[]
+ * ----------------------------------------------------------------------- */
+static int parse_test_cmd(const char *arg)
+{
+    char *buf, *p, *tok;
+    struct test_cmd *cmd;
+    int ret = 0;
+
+    if (g_num_test_cmds >= MAX_TEST_CMDS) {
+        printf("[Error] too many -t commands, max is %d\n", MAX_TEST_CMDS);
+        return -1;
+    }
+
+    cmd = &g_test_cmds[g_num_test_cmds];
+    memset(cmd, 0, sizeof(*cmd));
+
+    buf = strdup(arg);
+    if (!buf)
+        return -1;
+
+    p = buf;
+
+    /* --- protocol_id --- */
+    tok = strsep(&p, "/");
+    if (!tok || !p) {
+        printf("[Error] -t: invalid format, expected <protocol>/<msg>[/p0:p1:...]\n");
+        ret = -1;
+        goto out;
+    }
+    cmd->protocol_id = (uint8_t)strtoul(tok, NULL, 0);
+
+    /* --- msg_id --- */
+    tok = strsep(&p, "/");
+    if (!tok) {
+        printf("[Error] -t: missing msg_id\n");
+        ret = -1;
+        goto out;
+    }
+    cmd->msg_id = (uint8_t)strtoul(tok, NULL, 0);
+
+    /* --- optional params (colon-separated) --- */
+    if (p) {
+        char *param_tok;
+        while ((param_tok = strsep(&p, ":")) != NULL) {
+            if (cmd->num_params >= MAX_TEST_PARAMS) {
+                printf("[Error] -t: too many params, max is %d\n", MAX_TEST_PARAMS);
+                ret = -1;
+                goto out;
+            }
+            cmd->params[cmd->num_params++] = (uint32_t)strtoul(param_tok, NULL, 0);
+        }
+    }
+
+    g_num_test_cmds++;
+    printf("[Test] queued cmd[%d]: protocol=0x%02x msg=0x%02x num_params=%d\n",
+           g_num_test_cmds - 1, cmd->protocol_id, cmd->msg_id, cmd->num_params);
+
+out:
+    free(buf);
+    return ret;
+}
+
+/* -----------------------------------------------------------------------
+ * scmi_status_str – human-readable SCMI status code
+ * ----------------------------------------------------------------------- */
+static const char *scmi_status_str(int32_t status)
+{
+    switch (status) {
+    case  0: return "SUCCESS";
+    case -1: return "NOT_SUPPORTED";
+    case -2: return "INVALID_PARAMETERS";
+    case -3: return "DENIED";
+    case -4: return "NOT_FOUND";
+    case -5: return "OUT_OF_RANGE";
+    case -6: return "BUSY";
+    case -7: return "COMMS_ERROR";
+    case -8: return "GENERIC_ERROR";
+    case -9: return "HARDWARE_ERROR";
+    case -10: return "PROTOCOL_ERROR";
+    case -11: return "IN_USE";
+    default:  return "UNKNOWN";
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * run_test_cmds – execute all queued test commands and print responses
+ * ----------------------------------------------------------------------- */
+static void run_test_cmds(struct vhost_user_scmi *vscmi)
+{
+    int i, j;
+    /*
+     * Request buffer: 4-byte header + up to MAX_TEST_PARAMS × 4-byte params.
+     * Response buffer: fixed TEST_RSP_BUF_SIZE bytes.
+     */
+    uint8_t req_buf[sizeof(uint32_t) + MAX_TEST_PARAMS * sizeof(uint32_t)];
+    uint8_t rsp_buf[TEST_RSP_BUF_SIZE];
+    struct virtio_scmi_request  *req = (struct virtio_scmi_request  *)req_buf;
+    struct virtio_scmi_response *rsp = (struct virtio_scmi_response *)rsp_buf;
+    uint32_t rsp_len;
+    int      req_len;
+
+    printf("\n========== Running %d test command(s) ==========\n", g_num_test_cmds);
+
+    for (i = 0; i < g_num_test_cmds; i++) {
+        struct test_cmd *cmd = &g_test_cmds[i];
+
+        memset(req_buf, 0, sizeof(req_buf));
+        memset(rsp_buf, 0, sizeof(rsp_buf));
+
+        /*
+         * Build SCMI transport header (virtio-scmi / ARM SCMI spec):
+         *   bits[ 7: 0]  msg_id
+         *   bits[ 9: 8]  msg_type  (0 = command)
+         *   bits[17:10]  protocol_id
+         *   bits[27:18]  token     (use cmd index as token)
+         *   bits[31:28]  reserved
+         */
+        req->hdr = ((uint32_t)(cmd->msg_id      & 0xFF) <<  0)
+                 | ((uint32_t)(0                & 0x03) <<  8)   /* msg_type = command */
+                 | ((uint32_t)(cmd->protocol_id & 0xFF) << 10)
+                 | ((uint32_t)(i                & 0x3FF)<< 18);  /* token = cmd index  */
+
+        /* Fill request params */
+        for (j = 0; j < cmd->num_params; j++)
+            req->params[j] = cmd->params[j];
+
+        req_len = cmd->num_params * (int)sizeof(uint32_t);
+
+        /*
+         * rsp_len on entry = total response buffer size (including the 4-byte
+         * response header).  The protocol handlers subtract 4 to get the space
+         * available for the payload, then overwrite *rsp_len with the actual
+         * payload size on return.
+         */
+        rsp_len = TEST_RSP_BUF_SIZE;
+
+        /* Print what we are sending */
+        printf("\n[Test %d] >>> protocol=0x%02x  msg=0x%02x", i,
+               cmd->protocol_id, cmd->msg_id);
+        for (j = 0; j < cmd->num_params; j++)
+            printf("  param[%d]=0x%x(%u)", j, cmd->params[j], cmd->params[j]);
+        printf("\n");
+
+        int ret = scmi_msg_process_sync(vscmi, req, req_len, rsp, &rsp_len);
+        if (ret < 0) {
+            printf("[Test %d] <<< FAILED (scmi_msg_process_sync returned %d)\n", i, ret);
+            continue;
+        }
+
+        /*
+         * rsp_len now holds the payload size (bytes, excluding the 4-byte hdr).
+         * ret_values[0] is always the SCMI status code (int32_t).
+         */
+        int num_ret_words = (int)(rsp_len / sizeof(uint32_t));
+
+        printf("[Test %d] <<< rsp_hdr=0x%08x  payload_len=%u bytes\n",
+               i, rsp->hdr, rsp_len);
+
+        if (num_ret_words > 0) {
+            int32_t status = (int32_t)rsp->ret_values[0];
+            printf("         %-12s= %d (%s)\n", "status", status,
+                   scmi_status_str(status));
+        }
+        for (j = 1; j < num_ret_words; j++) {
+            /* Skip trailing zero words to keep output compact */
+            if (rsp->ret_values[j] == 0) {
+                /* Check if all remaining words are also zero */
+                int all_zero = 1;
+                int k;
+                for (k = j; k < num_ret_words; k++) {
+                    if (rsp->ret_values[k] != 0) { all_zero = 0; break; }
+                }
+                if (all_zero) {
+                    printf("         ret[%2d..%2d] = 0x00000000 (0) [all zero]\n",
+                           j, num_ret_words - 1);
+                    break;
+                }
+            }
+            printf("         ret[%2d]     = 0x%08x (%u)\n",
+                   j, rsp->ret_values[j], rsp->ret_values[j]);
+        }
+    }
+
+    printf("\n========== Test complete ==========\n\n");
+}
+
+/* -----------------------------------------------------------------------
+ * Normal vhost-user / SCMI device code
+ * ----------------------------------------------------------------------- */
 
 static void scmi_set_features(struct vhost_user_dev *dev, uint64_t features)
 {
@@ -298,7 +528,16 @@ usage(void)
             "-p/--power  <power domian nums>\n"
             "-r/--reset  <reset domian nums>\n"
             "-l/--log    log=<file/stdio>,[path=<path/to/logfile>],level=<info/debug>\n"
-            "-d/--device  <devicenmae,protocol/domainid/domainname,protocol/domainid/domainname,...>\n");
+            "-d/--device  <devicename,protocol/domainid/domainname,protocol/domainid/domainname,...>\n"
+            "-c/--cpufreq  <cpufreq,protocol/domainid/domainname,protocol/domainid/domainname,...>\n"
+            "-t/--test   <protocol/msg[/param0:param1:...]>  inject a fake SCMI command\n"
+            "            (may be repeated; exits after running all test commands)\n"
+            "  Examples:\n"
+            "    -t 0x13/0x4/4:0        perf: describe levels of domain 4 from index 0\n"
+            "    -t 0x13/0x7/4:1000000  perf: set level of domain 4 to 1000000\n"
+            "    -t 0x13/0x8/4          perf: get current level of domain 4\n"
+            "    -t 0x11/0x4/0:0:0      power: set domain 0 state\n"
+            "    -t 0x16/0x4/0:1:0      reset: assert reset on domain 0\n");
 }
 
 static int
@@ -313,12 +552,14 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
         {"perf",    required_argument, 0,  'f' },
         {"reset",   required_argument, 0,  'r' },
         {"device",  required_argument, 0,  'd' },
+        {"cpufreq", required_argument, 0,  'c' },
         {"log",     required_argument, 0,  'l' },
+        {"test",    required_argument, 0,  't' },
         {"help",    required_argument, 0,  'h' },
         {0,         0,                 0,  0 }
     };
 
-    while (((opt = getopt_long(argc, argv, "s:p:f:r:d:l:h",
+    while (((opt = getopt_long(argc, argv, "s:p:f:r:d:c:l:t:h",
                         long_options, NULL)) != -1) && (!ret)) {
         switch (opt) {
             case 's':
@@ -337,10 +578,16 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
                 ret = parse_reset_node(vscmi, optarg);
                 break;
             case 'd':
-                ret = parse_device_node(vscmi, optarg);
+                ret = parse_device_node(vscmi, optarg, DEV_USCMI);
+                break;
+            case 'c':
+                ret = parse_device_node(vscmi, optarg, DEV_CPUFREQ);
                 break;
             case 'l':
                 ret = parse_log_node(optarg);
+                break;
+            case 't':
+                ret = parse_test_cmd(optarg);
                 break;
             case 'h':
             default:
@@ -452,6 +699,17 @@ int main(int argc, char **argv)
     vscmi->vq_marked_for_deletion = 0;
     if (parse_args(vscmi, argc, argv) < 0)
         goto err;
+
+    /*
+     * Test mode: if one or more -t commands were given, execute them directly
+     * against the protocol handlers (no vhost-user socket / VM needed) and
+     * exit.  The caller must still supply the relevant protocol configuration
+     * flags (-f / -p / -r) so that the handlers have valid domain data.
+     */
+    if (g_num_test_cmds > 0) {
+        run_test_cmds(vscmi);
+        goto err;
+    }
 
     if (!vscmi->sock_path) {
         pr_err("[Error] please provide socket file name\n");

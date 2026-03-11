@@ -78,7 +78,12 @@ struct perf_resp_03 {
     Set to 0 if there are no FastChannels available for this domain.
     Bit[26] Extended performance domain name.
     If set to 1, the performance domain name is greater than 16 bytes.
-    Bits[25:0] Reserved and set to zero.
+    Bits[25] Level Indexing Mode
+    If set to 1, it indicates that the domain uses Level Indexing Mode. All commands which 
+      utilize performance level as a parameter need to specify the corresponding level 
+      index instead of the performance level when Level Indexing Mode is used.
+    If set to 0, Level Indexing Mode is not used
+    Bits[24:0] Reserved and set to zero.
     */
     uint32_t attributes;
     /*
@@ -111,6 +116,14 @@ struct perf_levels {
     uint32_t attributes;
 } __attribute__((packed));
 
+struct perf_levels_v4 {
+    uint32_t perf_val;
+    uint32_t power_cost;
+    uint16_t transition_latency_us;
+    uint16_t reserved;
+    uint32_t indicative_freq;
+    uint32_t level_index;
+} __attribute__((packed));
 
 struct perf_resp_04 {
     int32_t status;
@@ -128,6 +141,24 @@ struct perf_resp_04 {
                 performance to the level indicated by this entry in the array.
     */
     struct perf_levels perf_levels[MAX_TRANSFER_LEVEL];
+} __attribute__((packed));
+
+struct perf_resp_04_v4 {
+    int32_t status;
+    uint32_t num_levels;
+    /*
+    Array of performance levels, in numeric ascending order, to be described. N is specified
+    by Bits[11:0] of num_levels field. Each array entry is composed of three 32-bit words with
+    the following format:
+        uint32 entry[0] Performance level value.
+        uint32 entry[1] Power cost.
+            A value of zero indicates that the power cost is not reported by the platform.
+        uint32 entry[2] Attributes
+            Bits[31:16] Reserved, must be zero.
+            Bits[15:0] Worst-case transition latency in microseconds to move from any supported
+                performance to the level indicated by this entry in the array.
+    */
+    struct perf_levels_v4 perf_levels_v4[MAX_TRANSFER_LEVEL];
 } __attribute__((packed));
 
 struct perf_resp_07 {

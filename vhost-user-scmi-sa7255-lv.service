@@ -8,6 +8,7 @@ After= remote-fs.target
 Before = qcrosvm_lv.service
 
 [Service]
+Slice=gvm.slice
 Type=notify
 NotifyAccess=main
 

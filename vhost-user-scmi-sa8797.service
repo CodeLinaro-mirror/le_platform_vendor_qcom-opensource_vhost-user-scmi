@@ -10,6 +10,7 @@ DefaultDependencies = no
 Conflicts = shutdown.target
 
 [Service]
+Slice=gvm.slice
 Type=notify
 NotifyAccess=main
 

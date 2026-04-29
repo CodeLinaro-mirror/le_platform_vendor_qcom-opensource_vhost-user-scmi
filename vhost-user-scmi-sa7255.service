@@ -3,9 +3,11 @@
 [Unit]
 Description=Service for vhost-user-scmi
 
-After= remote-fs.target
+After= remote-fs.target tmp.mount systemd-modules-load.service
 
-Before = qcrosvm.service
+Before = qcrosvm.service shutdown.target
+DefaultDependencies = no
+Conflicts = shutdown.target
 
 [Service]
 Slice=gvm.slice

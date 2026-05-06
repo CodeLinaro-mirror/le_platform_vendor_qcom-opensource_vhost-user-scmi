@@ -3,9 +3,11 @@
 [Unit]
 Description=Service for lv vhost-user-scmi
 
-After= remote-fs.target
+After= remote-fs.target tmp.mount systemd-modules-load.service
 
-Before = qcrosvm_lv.service
+Before = qcrosvm_lv.service shutdown.target
+DefaultDependencies = no
+Conflicts = shutdown.target
 
 [Service]
 Type=notify

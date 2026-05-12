@@ -35,5 +35,8 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_bluetooth1,17/20/power_regulator,17/21/power_gpio \
 -d /dev/scmi_wlan1,17/22/power_regulator,17/23/power_gpio
 
+# Prevent this critical service from being killed by the OOM killer
+OOMScoreAdjust=-1000
+
 [Install]
 WantedBy = multi-user.target

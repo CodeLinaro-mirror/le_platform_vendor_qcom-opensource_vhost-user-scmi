@@ -530,6 +530,10 @@ usage(void)
             "-l/--log    log=<file/stdio>,[path=<path/to/logfile>],level=<info/debug>\n"
             "-d/--device  <devicename,protocol/domainid/domainname,protocol/domainid/domainname,...>\n"
             "-c/--cpufreq  <cpufreq,protocol/domainid/domainname,protocol/domainid/domainname,...>\n"
+            "-L/--latency <us>  system-level latency overhead in microseconds for the\n"
+            "                   GVM SCMI FE to PVM SCMI BE path; added to the device\n"
+            "                   transition latency reported in PERF_DESCRIBE_LEVELS\n"
+            "                   (default: 0)\n"
             "-t/--test   <protocol/msg[/param0:param1:...]>  inject a fake SCMI command\n"
             "            (may be repeated; exits after running all test commands)\n"
             "  Examples:\n"
@@ -554,12 +558,13 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
         {"device",  required_argument, 0,  'd' },
         {"cpufreq", required_argument, 0,  'c' },
         {"log",     required_argument, 0,  'l' },
+        {"latency", required_argument, 0,  'L' },
         {"test",    required_argument, 0,  't' },
         {"help",    required_argument, 0,  'h' },
         {0,         0,                 0,  0 }
     };
 
-    while (((opt = getopt_long(argc, argv, "s:p:f:r:d:c:l:t:h",
+    while (((opt = getopt_long(argc, argv, "s:p:f:r:d:c:l:L:t:h",
                         long_options, NULL)) != -1) && (!ret)) {
         switch (opt) {
             case 's':
@@ -585,6 +590,10 @@ parse_args(struct vhost_user_scmi *vscmi, int argc, char **argv)
                 break;
             case 'l':
                 ret = parse_log_node(optarg);
+                break;
+            case 'L':
+                vscmi->scmi_latency_us = (uint32_t)strtoul(optarg, NULL, 0);
+                printf("scmi system latency set to %u us\n", vscmi->scmi_latency_us);
                 break;
             case 't':
                 ret = parse_test_cmd(optarg);

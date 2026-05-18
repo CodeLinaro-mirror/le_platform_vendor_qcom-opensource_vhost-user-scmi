@@ -15,7 +15,8 @@
 #include "access_control.h"
 #include "log.h"
 
-#define SCMI_VIRTIO_FEATURES    (1UL << VIRTIO_F_VERSION_1)
+#define SCMI_VIRTIO_FEATURES    ((1UL << VIRTIO_F_VERSION_1)|(1UL << VHOST_USER_F_PROTOCOL_FEATURES))
+#define VIRTIO_SCMI_PROTOCOL_FEATURES    (1UL << VHOST_USER_PROTOCOL_F_REPLY_ACK)
 
 static int is_daemon = 1;
 SET_DECLARE(scmi_protolol_set, struct scmi_protocol_ops);
@@ -33,6 +34,20 @@ static uint64_t scmi_get_features(struct vhost_user_dev *dev)
 
     pr_debug("%s: get features %lx\n", __func__, vscmi->features);
     return vscmi->features;
+}
+
+static void scmi_set_protocol_features(struct vhost_user_dev *dev, uint64_t features)
+{
+    struct vhost_user_scmi *vscmi = container_of(dev, struct vhost_user_scmi, dev);
+    vscmi->protocol_features = features;
+    pr_debug("%s: set protocol features %lld\n", __func__, vscmi->protocol_features);
+}
+
+static uint64_t scmi_get_protocol_features(struct vhost_user_dev *dev)
+{
+    struct vhost_user_scmi *vscmi = container_of(dev, struct vhost_user_scmi, dev);
+    pr_debug("%s: get protocol features %lld\n", __func__, vscmi->protocol_features);
+    return vscmi->protocol_features;
 }
 
 struct scmi_protocol_ops *find_protocol(uint16_t protocol_id)
@@ -267,6 +282,8 @@ static int scmi_set_vring_state(struct vhost_user_dev *dev, uint32_t idx, uint32
 struct vhost_dev_ops dev_ops = {
     .set_features = scmi_set_features,
     .get_features = scmi_get_features,
+    .set_protocol_features = scmi_set_protocol_features,
+    .get_protocol_features = scmi_get_protocol_features,
     .set_vring_state = scmi_set_vring_state,
 };
 
@@ -445,6 +462,7 @@ int main(int argc, char **argv)
         goto err;
 
     vscmi->features = SCMI_VIRTIO_FEATURES;
+    vscmi->protocol_features = VIRTIO_SCMI_PROTOCOL_FEATURES;
     register_to_vmm_service();
 
 loop:

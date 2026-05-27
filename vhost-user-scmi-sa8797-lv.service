@@ -22,4 +22,4 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_i2c13,17/2/power
 
 [Install]
-WantedBy = multi-user.target
+WantedBy = multi-gvm.target

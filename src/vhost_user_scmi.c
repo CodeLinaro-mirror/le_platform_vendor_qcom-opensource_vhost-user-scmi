@@ -732,6 +732,9 @@ int main(int argc, char **argv)
     vscmi->protocol_features = VIRTIO_SCMI_PROTOCOL_FEATURES;
     register_to_vmm_service();
 
+    if (start_cpufreq_wait_thread() < 0)
+        goto err;
+
 loop:
     pr_debug("vhost user wait for connect ..\n");
     if (vhost_user_wait_for_connect(&vscmi->dev, vscmi->sock_path) < 0) {

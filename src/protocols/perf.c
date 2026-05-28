@@ -141,6 +141,22 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
                 break;
             }
 
+            fd = get_dev_fd(&vscmi->dev_res, 0x13, domainid);
+            if (fd < 0) {
+                /* cpufreq device node not opened yet by the background
+                 * wait thread; report as if the domain didn't exist. */
+                RESP(03)->status = SCMI_RESP_STATUS_NOT_FOUND;
+                break;
+            }
+
+            pd = &vscmi->pf_attr.pds[domainid];
+            if (dev_type == DEV_CPUFREQ && !pd->levels_fetched) {
+                if (update_dynamic_perf_domain(vscmi, dev_type, domainid, fd) < 0) {
+                    RESP(03)->status = SCMI_RESP_STATUS_NOT_FOUND;
+                    break;
+                }
+            }
+
             /*
              * Bit[30]: Can set performance level = 1
              * Bit[25]: Level Indexing Mode — set only for DEV_CPUFREQ.
@@ -166,7 +182,6 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
              * values, not frequencies, so report 0.
              */
             if (dev_type == DEV_CPUFREQ) {
-                pd = &vscmi->pf_attr.pds[domainid];
                 RESP(03)->sustained_freq = (pd->level_nums > 0) ?
                                            pd->level[pd->level_nums - 1] : 0;
             } else {
@@ -203,13 +218,28 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             }
             response_04_v4 = (struct perf_resp_04_v4 *)rsp->ret_values;
 
-            if (get_dev_type(&vscmi->dev_res, 0x13, domainid) < 0) {
+            dev_type = get_dev_type(&vscmi->dev_res, 0x13, domainid);
+            if (dev_type < 0) {
                 RESP(04_v4)->status = SCMI_RESP_STATUS_INV;
                 *rsp_len = hdr_size;
                 break;
             }
 
+            fd = get_dev_fd(&vscmi->dev_res, 0x13, domainid);
+            if (fd < 0) {
+                RESP(04_v4)->status = SCMI_RESP_STATUS_NOT_FOUND;
+                *rsp_len = hdr_size;
+                break;
+            }
+
             pd = &vscmi->pf_attr.pds[domainid];
+            if (dev_type == DEV_CPUFREQ && !pd->levels_fetched) {
+                if (update_dynamic_perf_domain(vscmi, dev_type, domainid, fd) < 0) {
+                    RESP(04_v4)->status = SCMI_RESP_STATUS_NOT_FOUND;
+                    *rsp_len = hdr_size;
+                    break;
+                }
+            }
 
             if (level_start == 0)
                 pd->left_levels = pd->level_nums;
@@ -459,7 +489,10 @@ err:
     return -1;
 }
 
-/* Update the perf domain id and perf levels obtained through IOCTL */
+/* Update the perf domain id and perf levels obtained through IOCTL.
+ * Called lazily on the first SCMI request that touches a DEV_CPUFREQ
+ * domain (see scmi_perf_req_process()), not at device-open time, so that
+ * device bring-up never blocks on this IOCTL. */
 int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_type,
                                 uint32_t domain_id, int fd)
 {
@@ -473,10 +506,6 @@ int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_
         return -1;
     }
     pd = &pa->pds[domain_id];
-    if (pd->level_nums > 0) {
-        pr_err("should not use the duplicated domain_id %d!\n", domain_id);
-        return -1;
-    }
 
     switch (dev_type) {
         case DEV_CPUFREQ: {
@@ -512,7 +541,9 @@ int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_
                          domain_id, pd->transition_latency_us);
             }
 
-            pa->domain_nums++;
+            /* domain_id is already counted in pa->domain_nums via the -f
+             * placeholder entry that reserved it; don't count it again. */
+            pd->levels_fetched = true;
             break;
         }
         default:

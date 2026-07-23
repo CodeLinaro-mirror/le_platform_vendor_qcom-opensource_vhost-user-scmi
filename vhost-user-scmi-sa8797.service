@@ -33,7 +33,9 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_usb1_qmp,17/17/usb_transfer,17/18/usb_core \
 -d /dev/scmi_pcie3,17/19/power \
 -d /dev/scmi_bluetooth1,17/20/power_regulator,17/21/power_gpio \
--d /dev/scmi_wlan1,17/22/power_regulator,17/23/power_gpio
+-d /dev/scmi_wlan1,17/22/power_regulator,17/23/power_gpio \
+-c /dev/cpu-freq-domain0,19/4/perf \
+-c /dev/cpu-freq-domain1,19/5/perf
 
 # Prevent this critical service from being killed by the OOM killer
 OOMScoreAdjust=-1000

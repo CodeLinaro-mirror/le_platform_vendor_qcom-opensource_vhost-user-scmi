@@ -49,6 +49,7 @@ struct perf_domain {
     uint32_t level[MAX_PERF_LEVEL];
     uint32_t level_index[MAX_PERF_LEVEL]; /* only valid for DEV_CPUFREQ (level indexing mode) */
     uint32_t left_levels;
+    uint32_t transition_latency_us; /* transition latency in microseconds (DEV_CPUFREQ only) */
 };
 
 struct perf_attributes {
@@ -120,6 +121,13 @@ struct vhost_user_scmi {
     int vq_marked_for_deletion;
     /* Condition variable for signaling when virtqueue is no longer in use */
     pthread_cond_t vq_cond;
+    /*
+     * User-configurable system-level latency overhead (in microseconds) for
+     * the GVM SCMI FE → PVM SCMI BE communication path.  Added to the
+     * device transition latency when reporting PERF_DESCRIBE_LEVELS.
+     * Defaults to 0 if not specified by the user.
+     */
+    uint32_t scmi_latency_us;
 };
 
 struct scmi_msg_info {

@@ -243,15 +243,30 @@ static int scmi_perf_req_process(struct vhost_user_scmi *vscmi, struct scmi_msg_
             RESP(04_v4)->num_levels = (pd->left_levels << 16) | (trans_levels << 0);
 
             for (i = level_start; i < (level_start + trans_levels) && i < pd->level_nums; i++) {
+                /*
+                 * Total transition latency = device latency (from IOCTL) +
+                 * system latency (GVM SCMI FE → PVM SCMI BE overhead,
+                 * user-configurable via -L/--latency, default 0).
+                 * Clamp to UINT16_MAX to fit the 16-bit wire field.
+                 */
+                uint32_t total_latency_us = pd->transition_latency_us +
+                                            vscmi->scmi_latency_us;
+                if (total_latency_us > UINT16_MAX)
+                    total_latency_us = UINT16_MAX;
+
                 RESP(04_v4)->perf_levels_v4[i - level_start].perf_val              = pd->level[i];
                 /* Power cost: 0 means not reported by the platform */
                 RESP(04_v4)->perf_levels_v4[i - level_start].power_cost            = 0;
-                RESP(04_v4)->perf_levels_v4[i - level_start].transition_latency_us = 0;
+                RESP(04_v4)->perf_levels_v4[i - level_start].transition_latency_us =
+                    (uint16_t)total_latency_us;
                 RESP(04_v4)->perf_levels_v4[i - level_start].reserved              = 0;
                 RESP(04_v4)->perf_levels_v4[i - level_start].indicative_freq       = pd->level[i];
                 RESP(04_v4)->perf_levels_v4[i - level_start].level_index           = pd->level_index[i];
-                pr_debug("domain_id=%d, level=%d, level_index=%d\n",
-                         domainid, pd->level[i], pd->level_index[i]);
+                pr_debug("domain_id=%d, level=%d, level_index=%d, "
+                         "dev_latency_us=%u scmi_latency_us=%u total_latency_us=%u\n",
+                         domainid, pd->level[i], pd->level_index[i],
+                         pd->transition_latency_us, vscmi->scmi_latency_us,
+                         total_latency_us);
             }
             RESP(04_v4)->status = SCMI_RESP_STATUS_OK;
             /* Set *rsp_len to the exact bytes used (same role as PRE_PROCESS in other cases) */
@@ -421,6 +436,7 @@ int parse_perf_node(struct vhost_user_scmi *vscmi, char *args)
             goto err;
         }
         pd->domain_id = domain_id;
+        pd->transition_latency_us = 0;
 
         while ((sttt = strsep(&st, ":"))) {
             if (pd->level_nums >= MAX_PERF_LEVEL) {
@@ -463,7 +479,9 @@ int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_
     }
 
     switch (dev_type) {
-        case DEV_CPUFREQ:
+        case DEV_CPUFREQ: {
+            struct cpu_perf_transition_latency lat_req;
+
             memset(&cpu_req, 0, sizeof(cpu_req));
             if (ioctl(fd, CPU_PERF_LEVELS_GET_AVAILABLE, &cpu_req) < 0) {
                 pr_err("failed to get the perf levels\n");
@@ -477,9 +495,28 @@ int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_
             }
             pd->level_nums  = cpu_req.num_levels;
             pd->left_levels = pd->level_nums;
+
+            /*
+             * Query the transition latency for this cpufreq device node.
+             * The latency is the same for all levels on a given device,
+             * so fetch it once here during bringup and cache it in pd.
+             */
+            memset(&lat_req, 0, sizeof(lat_req));
+            if (ioctl(fd, CPU_PERF_TRANSITION_LATENCY_GET, &lat_req) < 0) {
+                pr_err("failed to get transition latency for domain %d, defaulting to 0\n",
+                       domain_id);
+                pd->transition_latency_us = 0;
+            } else {
+                pd->transition_latency_us = lat_req.latency_us;
+                pr_debug("domain %d transition_latency_us=%u\n",
+                         domain_id, pd->transition_latency_us);
+            }
+
             pa->domain_nums++;
             break;
+        }
         default:
+            pd->transition_latency_us = 0; /* not a cpufreq device; no latency IOCTL */
             break;
     }
     return 0;

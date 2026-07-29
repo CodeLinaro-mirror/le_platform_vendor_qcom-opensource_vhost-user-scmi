@@ -3,7 +3,8 @@
 [Unit]
 Description=Service for vhost-user-scmi
 
-After= remote-fs.target
+After= remote-fs.target early-services.target
+Wants=early-services.target
 
 Before = qcrosvm.service
 

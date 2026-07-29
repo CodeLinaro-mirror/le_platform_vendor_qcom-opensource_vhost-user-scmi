@@ -3,7 +3,8 @@
 [Unit]
 Description=Service for lv vhost-user-scmi
 
-After= remote-fs.target tmp.mount systemd-modules-load.service disksymlink.service
+After= remote-fs.target tmp.mount systemd-modules-load.service early-services.target
+Wants=early-services.target
 
 Before = qcrosvm_lv.service shutdown.target
 DefaultDependencies = no

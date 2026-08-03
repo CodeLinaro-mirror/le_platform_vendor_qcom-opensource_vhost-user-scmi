@@ -50,6 +50,7 @@ struct perf_domain {
     uint32_t level_index[MAX_PERF_LEVEL]; /* only valid for DEV_CPUFREQ (level indexing mode) */
     uint32_t left_levels;
     uint32_t transition_latency_us; /* transition latency in microseconds (DEV_CPUFREQ only) */
+    uint8_t  levels_fetched; /* DEV_CPUFREQ: perf levels read from device yet? */
 };
 
 struct perf_attributes {

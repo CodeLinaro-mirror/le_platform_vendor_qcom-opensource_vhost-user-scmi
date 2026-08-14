@@ -23,4 +23,3 @@ ExecStart=/usr/bin/vhost-user-scmi \
 
 [Install]
 WantedBy = multi-gvm.target
-WantedBy = single-lv-gvm.target

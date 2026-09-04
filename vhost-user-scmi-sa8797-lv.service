@@ -3,7 +3,8 @@
 [Unit]
 Description=Service for lv vhost-user-scmi
 
-After= remote-fs.target
+After= remote-fs.target early-services.target
+Wants=early-services.target
 
 Before = qcrosvm_lv.service
 
@@ -23,4 +24,3 @@ ExecStart=/usr/bin/vhost-user-scmi \
 
 [Install]
 WantedBy = multi-gvm.target
-WantedBy = single-lv-gvm.target

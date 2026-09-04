@@ -3,7 +3,8 @@
 [Unit]
 Description=Service for vhost-user-scmi
 
-After= remote-fs.target tmp.mount systemd-modules-load.service
+After= remote-fs.target tmp.mount systemd-modules-load.service early-services.target
+Wants=early-services.target
 
 Before = qcrosvm.service shutdown.target
 DefaultDependencies = no
@@ -17,9 +18,10 @@ NotifyAccess=main
 ExecStart=/usr/bin/vhost-user-scmi \
 -l level=debug \
 -s /tmp/pt-dev-skt \
--f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,1/10:100:1000:2500:5000:10000,2/10:100:1000:2500:5000,3/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000 \
--p 24 \
+-f 0/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,1/10:100:1000:2500:5000:10000,2/10:100:1000:2500:5000,3/300:1200:2400:4800:9600:19200:38400:57600:115200:230400:460800:921600:2000000:3000000:4000000:8000000,4/0,5/0,6/144:400:19200:20000:25000:50000:100000:192000:384000 \
+-p 26 \
 -r 2 \
+-L 15 \
 -d /dev/scmi_usb2,17/0/usb_transfer,17/1/usb_core \
 -d /dev/scmi_usb2_phy2,17/2/usb_transfer,17/3/usb_core \
 -d /dev/scmi_uart17,19/0/perf,17/4/power \
@@ -33,7 +35,12 @@ ExecStart=/usr/bin/vhost-user-scmi \
 -d /dev/scmi_usb1_qmp,17/17/usb_transfer,17/18/usb_core \
 -d /dev/scmi_pcie3,17/19/power \
 -d /dev/scmi_bluetooth1,17/20/power_regulator,17/21/power_gpio \
--d /dev/scmi_wlan1,17/22/power_regulator,17/23/power_gpio
+-d /dev/scmi_wlan1,17/22/power_regulator,17/23/power_gpio \
+-c /dev/cpu-freq-domain0,19/4/perf \
+-c /dev/cpu-freq-domain1,19/5/perf \
+-d /dev/scmi_sdhc4,17/24/power,19/6/perf \
+-d /dev/scmi_ufs2,17/25/power
+
 
 # Prevent this critical service from being killed by the OOM killer
 OOMScoreAdjust=-1000

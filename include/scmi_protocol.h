@@ -47,7 +47,10 @@ struct perf_domain {
     uint16_t level_nums;
 #define MAX_PERF_LEVEL  64
     uint32_t level[MAX_PERF_LEVEL];
+    uint32_t level_index[MAX_PERF_LEVEL]; /* only valid for DEV_CPUFREQ (level indexing mode) */
     uint32_t left_levels;
+    uint32_t transition_latency_us; /* transition latency in microseconds (DEV_CPUFREQ only) */
+    uint8_t  levels_fetched; /* DEV_CPUFREQ: perf levels read from device yet? */
 };
 
 struct perf_attributes {
@@ -77,12 +80,19 @@ struct protocol_domain {
     uint16_t domain_id;
     char domain_name[MAX_DOMAIN_LENGTH];
 };
+
+typedef enum {
+    DEV_USCMI = 0,
+    DEV_CPUFREQ,
+}dm_dev_type_t;
+
 // domian id + protocol id -> dev_fd
 struct device_map {
     int      dev_fd;
     uint16_t    pd_nums;
 #define MAX_PROTOCOL_NUM 64
     struct protocol_domain prot_doms[MAX_PROTOCOL_NUM];
+    dm_dev_type_t   dev_type;
 };
 
 struct device_resource {
@@ -112,6 +122,13 @@ struct vhost_user_scmi {
     int vq_marked_for_deletion;
     /* Condition variable for signaling when virtqueue is no longer in use */
     pthread_cond_t vq_cond;
+    /*
+     * User-configurable system-level latency overhead (in microseconds) for
+     * the GVM SCMI FE → PVM SCMI BE communication path.  Added to the
+     * device transition latency when reporting PERF_DESCRIBE_LEVELS.
+     * Defaults to 0 if not specified by the user.
+     */
+    uint32_t scmi_latency_us;
 };
 
 struct scmi_msg_info {
@@ -142,4 +159,6 @@ struct scmi_protocol_ops {
 int parse_power_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_perf_node(struct vhost_user_scmi *vscmi, char *args);
 int parse_reset_node(struct vhost_user_scmi *vscmi, char *args);
+int update_dynamic_perf_domain(struct vhost_user_scmi *vscmi, dm_dev_type_t dev_type, uint32_t domain_id, int fd);
+
 #endif

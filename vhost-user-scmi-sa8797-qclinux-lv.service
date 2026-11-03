@@ -3,7 +3,12 @@
 [Unit]
 Description=Service for qclinux lv vhost-user-scmi
 
-After= remote-fs.target
+After= remote-fs.target tmp.mount systemd-modules-load.service early-services.target
+Wants=early-services.target
+
+Before = qcrosvm.service shutdown.target
+DefaultDependencies = no
+Conflicts = shutdown.target
 
 [Service]
 Slice=gvm.slice
